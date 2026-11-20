@@ -1,0 +1,25 @@
+﻿AURA Inteligencia Artificial 3.0 — Escritorio nativo Windows 10 x64
+
+Ventana propia Qt. No inicia un navegador ni un servidor web. Motor CPU Qwen2.5-Coder 1.5B Q4_K_M con bibliotecas SSE4.2/x64; no utiliza AVX ni CUDA para generar texto. Ajuste inicial: 2 hilos. El i5 de primera generación de destino no se ha probado físicamente.
+
+La carga por proceso libera memoria al terminar cada respuesta. AURA prepara una caché local al iniciar para acelerar consultas posteriores. Se puede borrar desde Pensamiento y ajustes. El modo Temporal no guarda contexto en esa caché. Reduce consumo en reposo, pero carga y preparación pueden superar 3,5 segundos. La prueba nativa en frío registró unos 9,7 segundos hasta el primer texto. Con caché preparada, dos consultas cortas registraron unos 1,3 y 2,6 segundos en el equipo de prueba. No se garantizan esos tiempos en otra PC. No hay cuota de tokens; contexto y longitud son finitos.
+
+Inicio: abre AURA. Omite el video si lo deseas. Escribe y pulsa Enviar. Conversación responde preguntas; Programación usa la carpeta elegida y pide aprobación antes de aplicar cambios. Terminal y compilación piden autorización para ejecutar comandos. Los modelos adicionales de esta versión deben ser Qwen2/Qwen2.5 Instruct ChatML GGUF. Otros formatos de conversación todavía no son compatibles.
+
+Memoria: escribe recuerda: seguido del dato, o abre Memoria para agregar, editar, buscar, olvidar, exportar e importar. Puedes separar recuerdos generales y por proyecto. Las conversaciones se conservan y pueden reabrirse desde el historial. Temporal no guarda la conversación ni recupera memoria; funciona en Conversación. No guardes claves en los recuerdos. Los datos están en %LOCALAPPDATA%\AURA_IA. Un respaldo manual de esa carpeta conserva conversaciones y memoria. La clave cifrada de ElevenLabs solo se descifra bajo el usuario Windows que la guardó.
+
+Asistente flotante: arrástralo, pulsa Abrir para mostrar AURA o Dictar para hablar. Ocultar lo desactiva; puedes recuperarlo en Pensamiento y ajustes. Su animación es ligera y no carga otro modelo.
+
+Dictado offline: pulsa Dictar, habla y pulsa Terminar dictado; revisa la transcripción antes de Enviar. Incluye Vosk pequeño en español. Se escucha únicamente al pulsar el botón, con límite de 60 segundos. No se guardan grabaciones del micrófono. La prueba se hizo con audio sintético, no con tu micrófono físico.
+
+Voz: Windows proporciona el respaldo offline. Para español, debe existir una voz española instalada en Windows. En Voz y audio puedes ajustar la voz, volumen y velocidad y escuchar el MP3 Kate proporcionado.
+
+ElevenLabs: selecciona ElevenLabs con respaldo local, introduce tu API key dentro de la aplicación y pulsa Consultar mi cuenta y buscar Kate. Selecciona su voz o introduce su identificador y guarda. La clave se cifra con DPAPI de Windows. Nunca la envíes por chat. ElevenLabs necesita Internet y saldo o disponibilidad en la cuenta; el texto que se lee se envía al servicio. Si falla, se usa la voz local. No se ha probado una llamada real porque no se dispone de tu clave ni de tu identificador. No hay credenciales dentro del instalador.
+
+Clonación local Kate: NO está terminada ni validada. El MP3 es una referencia, no un modelo. Se investigaron opciones para CPU; el candidato ligero NeuTTS Nano Spanish exige acceso con cuenta y aceptación de sus condiciones. La semejanza y velocidad en este i5 todavía deben comprobarse. No se presenta la voz Windows como clon de Kate.
+
+Herramientas: incluye Python y PyInstaller para compilar proyectos Python. Cada proyecto puede necesitar dependencias adicionales. Activa habilidades desde Habilidades; no conceden permisos nuevos. El análisis binario es básico, no una suite completa REA.
+
+El instalador no está firmado. Desinstalar conserva la información del usuario. Licencias incluidas en licencias. Aplicación independiente de OpenAI Codex.
+
+Contexto: la barra permite elegir de 2048 a 8192 tokens; se recomiendan 4096 para el i5. Si activas la ampliación automática se puede usar hasta 8192 al necesitar más espacio. El historial completo sigue guardado; el modelo recibe el inicio de la tarea y los turnos recientes. Un texto que exceda incluso ese límite debe dividirse o consultarse por partes.

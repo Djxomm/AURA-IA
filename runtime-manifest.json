@@ -1,0 +1,24 @@
+{
+  "model": {
+    "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/f86cb2c1fa58255f8052cc32aeede1b7482d4361/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+    "sha256": "cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046",
+    "size": 1117320768
+  },
+  "engine": {
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12554/llama-b12554-bin-win-cpu-x64.zip",
+    "sha256": "fa855d6e2e4ba5c080c54a60689f57c1d7c93634613a065bbb8b7de4fa315c72",
+    "cpu_backends": [
+      "sse42",
+      "x64"
+    ],
+    "gpu_layers": 0
+  },
+  "python": {
+    "url": "https://www.python.org/ftp/python/3.13.9/python-3.13.9-embed-amd64.zip"
+  },
+  "state": "AURA 2.0; assets included in offline installer, omitted from source archive",
+  "vosk": {
+    "url": "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip",
+    "sha256": "09b239888f633ef2f0b4e09736e3d9936acfd810bc65d53fad45261762c6511f"
+  }
+}

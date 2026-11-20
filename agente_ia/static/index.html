@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURA · Inteligencia Artificial</title>
+    
+    <!-- Tailwind CSS -->
+    
+    
+    <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+    
+    
+    
+    
+    <!-- Marked.js para formateo limpio de respuestas Markdown -->
+    
+
+    
+
+    
+<link rel="icon" href="/static/assets/aura-icono.png"><link rel="stylesheet" href="/static/vendor/tailwind.css"><link rel="stylesheet" href="/static/aura.css"></head>
+<body class="h-screen w-screen overflow-hidden flex selection:bg-[#00F0FF]/25 selection:text-[#00F0FF]">
+
+    <!-- Backdrop móvil para el sidebar -->
+    <div id="sidebar-backdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 hidden md:hidden transition-opacity"></div>
+
+    <!-- BARRA LATERAL IZQUIERDA (COLAPSABLE) -->
+    <aside id="sidebar" class="fixed md:static inset-y-0 left-0 z-40 w-72 glass-panel border-r border-[#00F0FF]/15 flex flex-col transition-all duration-300 ease-in-out -translate-x-full md:translate-x-0">
+        
+        <!-- Cabecera de Marca AURA IA -->
+        <div class="p-4 flex items-center justify-between border-b border-white/5">
+            <div class="flex items-center gap-3">
+                <!-- Icono SVG Núcleo Holográfico Compacto -->
+                <div class="relative w-9 h-9 flex items-center justify-center rounded-xl bg-[#050A14] border border-[#00F0FF]/30 shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+                    <img src="/static/assets/aura-icono.png" class="aura-brand-icon" alt="AURA">
+                </div>
+                <div>
+                    <span class="font-display font-bold tracking-wider text-base text-white">AURA <span class="text-[#00F0FF]">IA</span></span>
+                    <span class="block text-[10px] tracking-widest uppercase text-[#00F0FF]/70">Inteligencia Artificial</span>
+                </div>
+            </div>
+
+            <!-- Botón colapsar sidebar en escritorio/móvil -->
+            <button onclick="toggleSidebar()" title="Alternar barra lateral" class="p-2 rounded-lg text-slate-400 hover:text-[#00F0FF] hover:bg-white/5 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Botón Nueva Conversación -->
+        <div class="p-3.5">
+            <button onclick="createNewChat()" class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#0077FF]/25 to-[#00F0FF]/20 hover:from-[#0077FF]/40 hover:to-[#00F0FF]/35 border border-[#00F0FF]/35 text-white font-medium text-sm flex items-center justify-center gap-2.5 shadow-[0_0_20px_rgba(0,240,255,0.1)] hover:shadow-[0_0_25px_rgba(0,240,255,0.25)] transition-all">
+                <svg class="w-4 h-4 text-[#00F0FF]" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                </svg>
+                <span>Nueva conversación</span>
+            </button>
+        </div>
+
+<nav class="aura-navigation" aria-label="Herramientas de AURA">
+<button type="button" onclick="openPanel('models')">◈ <span>Modelos</span></button>
+<button type="button" onclick="openPanel('settings')">⚙ <span>Ajustes de pensamiento</span></button>
+<button type="button" onclick="openPanel('project')">▣ <span>Proyecto y archivos</span></button>
+<button type="button" onclick="openPanel('skills')">✧ <span>Habilidades</span></button>
+<button type="button" onclick="openPanel('terminal')">›_ <span>Terminal y compilación</span></button>
+<button type="button" onclick="searchOnline()">⌕ <span>Buscar en línea</span></button>
+</nav><label class="aura-history-search"><span class="sr-only">Buscar conversación</span><input id="history-search" placeholder="Buscar en el historial…" autocomplete="off"></label>
+        <!-- Lista de Historial de Conversaciones -->
+        <div class="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+            <div class="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                Historial reciente
+            </div>
+            <div id="chat-history-list" class="space-y-1">
+                <!-- Se llena dinámicamente con JS -->
+            </div>
+        </div>
+
+        <!-- Pie de barra lateral -->
+        <div class="p-3.5 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF]"></span>
+                <span>AURA · Local</span>
+            </div>
+            <button onclick="clearAllHistory()" class="text-slate-500 hover:text-rose-400 transition-colors" title="Limpiar historial">
+                Limpiar todo
+            </button>
+        </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL DE CHAT -->
+    <main class="flex-1 flex flex-col h-full relative min-w-0">
+        
+        <!-- Barra Superior Minimalista -->
+        <header class="aura-topbar h-14 px-4 md:px-6 flex items-center justify-between border-b border-white/[0.04] bg-[#050A14]/60 backdrop-blur-md z-20">
+            <div class="flex items-center gap-3">
+                <!-- Botón abrir sidebar (visible cuando está colapsado o en móvil) -->
+                <button id="open-sidebar-btn" onclick="toggleSidebar()" class="p-2 rounded-xl text-slate-300 hover:text-[#00F0FF] hover:bg-white/5 transition-colors" title="Mostrar menú">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/>
+                    </svg>
+                </button>
+                <div class="flex items-center gap-2">
+                    <span id="current-chat-title" class="font-medium text-sm text-slate-200 truncate max-w-[200px] sm:max-w-md">Nueva conversación</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 aura-header-actions">
+<select id="chat-mode" aria-label="Modo de AURA"><option value="chat">Conversación</option><option value="code">Programación</option></select>
+<button type="button" id="active-model" onclick="openPanel('models')">Modelo local</button>
+<button type="button" class="aura-settings-shortcut" onclick="openPanel('settings')" title="Ajustes de pensamiento">⚙</button>
+                <button onclick="createNewChat()" class="p-2 rounded-xl text-slate-400 hover:text-[#00F0FF] hover:bg-white/5 transition-colors text-xs flex items-center gap-1.5" title="Reiniciar chat actual">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    <span class="hidden sm:inline">Reiniciar</span>
+                </button>
+            </div>
+        </header>
+
+<div id="engine-status" class="aura-engine-status" role="status">Conectando con AURA…</div>
+        <!-- Contenedor Desplazable de Mensajes / Estado Inicial -->
+        <div id="chat-scroll-container" class="flex-1 overflow-y-auto px-4 md:px-8 pt-6 pb-36 scroll-smooth">
+            <div class="max-w-3xl mx-auto h-full flex flex-col">
+                
+                <!-- ESTADO INICIAL DE BIENVENIDA (EMPTY STATE) -->
+                <div id="welcome-screen" class="my-auto py-6 flex flex-col items-center text-center animate-fade-in">
+                    
+<img src="/static/assets/aura-portada.png" class="aura-hero" alt="AURA Inteligencia Artificial">
+                    <!-- Título y Eslogan -->
+                    <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white mb-2">
+                        AURA <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#00F0FF] to-[#0077FF]">IA</span>
+                    </h1>
+                    <p class="text-slate-400 text-sm sm:text-base max-w-md mb-9 font-light">
+                        Energía inteligente que conecta con tus ideas.
+                    </p>
+
+                    <!-- 4 Tarjetas de Sugerencia Rápida -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl text-left">
+                        <button onclick="useSuggestion('Ayúdame a crear un programa Python. Antes de escribir archivos, revisa el proyecto y muestra los cambios para aprobarlos.')" class="prompt-card p-4 rounded-2xl group">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-semibold uppercase tracking-wider text-[#00F0FF]">Programar</span>
+                                <svg class="w-4 h-4 text-slate-500 group-hover:text-[#00F0FF] transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                </svg>
+                            </div>
+                            <p class="text-sm text-slate-200 font-medium">Ideas para un proyecto con IA</p>
+                            <p class="text-xs text-slate-400 mt-0.5">Conceptos innovadores listos para ejecutar</p>
+                        </button>
+
+                        <button onclick="useSuggestion('Explícame un concepto de programación con un ejemplo sencillo.')" class="prompt-card p-4 rounded-2xl group">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-semibold uppercase tracking-wider text-[#00F0FF]">Aprendizaje</span>
+                                <svg class="w-4 h-4 text-slate-500 group-hover:text-[#00F0FF] transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                </svg>
+                            </div>
+                            <p class="text-sm text-slate-200 font-medium">Explica un tema complejo</p>
+                            <p class="text-xs text-slate-400 mt-0.5">Computación cuántica en palabras simples</p>
+                        </button>
+
+                        <button onclick="useSuggestion('Ayúdame a redactar un correo profesional y persuasivo para presentar una propuesta a un cliente.')" class="prompt-card p-4 rounded-2xl group">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-semibold uppercase tracking-wider text-[#00F0FF]">Redacción</span>
+                                <svg class="w-4 h-4 text-slate-500 group-hover:text-[#00F0FF] transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                            </div>
+                            <p class="text-sm text-slate-200 font-medium">Redactar propuesta profesional</p>
+                            <p class="text-xs text-slate-400 mt-0.5">Mensaje claro, elegante y persuasivo</p>
+                        </button>
+
+                        <button onclick="useSuggestion('Crea una rutina semanal de productividad para organizar mis metas personales y laborales sin agotarme.')" class="prompt-card p-4 rounded-2xl group">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-semibold uppercase tracking-wider text-[#00F0FF]">Productividad</span>
+                                <svg class="w-4 h-4 text-slate-500 group-hover:text-[#00F0FF] transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                                </svg>
+                            </div>
+                            <p class="text-sm text-slate-200 font-medium">Organizar mi semana</p>
+                            <p class="text-xs text-slate-400 mt-0.5">Plan equilibrado de enfoque y bienestar</p>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- LISTA DE MENSAJES ACTIVOS -->
+                <div id="messages-container" class="space-y-6 hidden">
+                    <!-- Los mensajes se insertan aquí dinámicamente -->
+                </div>
+
+            </div>
+        </div>
+
+        <!-- BARRA FLOTANTE INFERIOR DE ENTRADA (GLASSMORPHIC) -->
+        <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#050A14] via-[#050A14]/95 to-transparent pt-6 pb-4 px-4 md:px-8 z-20">
+            <div class="max-w-3xl mx-auto">
+<div id="attached-files" class="aura-attached" hidden></div><div id="generation-status" class="aura-generation-status" role="status"></div>
+                <form id="chat-form" onsubmit="handleSendMessage(event)" class="glass-input rounded-2xl p-2 flex items-end gap-2">
+                    
+                    <!-- Botón visual de adjuntar archivo -->
+                    <button type="button" onclick="openPanel('project')" title="Adjuntar archivo" class="p-2.5 rounded-xl text-slate-400 hover:text-[#00F0FF] hover:bg-white/5 transition-colors shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                        </svg>
+                    </button>
+
+                    <!-- Textarea auto-expandible -->
+                    <textarea 
+                        id="user-input" 
+                        rows="1" 
+                        placeholder="Escribe tu mensaje para AURA IA..." 
+                        class="w-full bg-transparent text-slate-100 placeholder-slate-500 text-sm sm:text-[15px] py-2.5 px-1 resize-none focus:outline-none max-h-40 leading-relaxed"
+                        oninput="autoResizeTextarea(this)"
+                        onkeydown="handleTextareaKeydown(event)"
+                    ></textarea>
+
+                    <!-- Botón visual de entrada por voz -->
+                    <button type="button" onclick="openPanel('settings')" title="Ajustes de pensamiento" class="p-2.5 rounded-xl text-slate-400 hover:text-[#00F0FF] hover:bg-white/5 transition-colors shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                        </svg>
+                    </button>
+
+<button type="button" id="stop-btn" class="aura-stop" onclick="stopResponse()" hidden>Detener</button>
+                    <!-- Botón Enviar Cian Luminoso -->
+                    <button 
+                        id="send-btn" 
+                        type="submit" 
+                        title="Enviar mensaje"
+                        class="p-2.5 rounded-xl bg-gradient-to-tr from-[#0077FF] to-[#00F0FF] text-[#050A14] font-semibold shadow-[0_0_18px_rgba(0,240,255,0.45)] hover:shadow-[0_0_25px_rgba(0,240,255,0.75)] hover:scale-[1.03] active:scale-95 transition-all shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </form>
+
+                <p class="text-center text-[11px] text-slate-500 mt-2">
+                    AURA IA puede cometer errores. Verifica la información importante.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notificación Toast Flotante -->
+    <div id="toast" class="fixed top-16 right-5 z-50 px-4 py-2.5 rounded-xl glass-panel border border-[#00F0FF]/40 text-xs text-[#00F0FF] shadow-[0_0_20px_rgba(0,240,255,0.2)] opacity-0 pointer-events-none transition-all duration-300 translate-y-2">
+        Mensaje copiado al portapapeles
+    </div>
+
+    
+<dialog id="tool-dialog" class="aura-dialog"><header><div><p>AURA · Herramientas</p><h2 id="tool-title"></h2></div><button type="button" onclick="closePanel()" aria-label="Cerrar panel">✕</button></header><div id="tool-body"></div></dialog>
+<section id="intro" class="aura-intro" aria-label="Inicio de AURA"><div class="aura-intro-card"><video id="intro-video" src="/static/assets/aura-inicio.mp4" poster="/static/assets/aura-portada.png" autoplay muted playsinline preload="metadata"></video><div class="aura-intro-copy"><img src="/static/assets/aura-icono.png" alt=""/><div><h1>AURA</h1><p>Inteligencia Artificial</p></div></div><p id="intro-status" role="status">Preparando tu espacio de trabajo…</p><div class="aura-intro-actions"><button type="button" onclick="introSound()">Activar sonido</button><button type="button" onclick="dismissIntro()">Omitir inicio →</button></div></div></section>
+<script src="/static/aura.js" type="module"></script></body>
+</html>

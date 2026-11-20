@@ -1,0 +1,3 @@
+AURA utiliza PySide6 / Qt 6.8.3 bajo LGPLv3, mediante bibliotecas dinámicas. Se permite sustituir las bibliotecas y realizar ingeniería inversa para depurar modificaciones de esas bibliotecas conforme a su licencia. Fuentes correspondientes: https://download.qt.io/archive/qt/6.8/6.8.3/ y https://code.qt.io/cgit/pyside/pyside-setup.git/?h=v6.8.3 . Licencias LGPLv3 y GPLv3 incluidas.
+Vosk y el modelo pequeño en español: Apache 2.0. https://github.com/alphacep/vosk-api y https://alphacephei.com/vosk/models .
+El audio de referencia Kate fue proporcionado por el usuario para esta entrega privada. No se ha entrenado ni distribuido un modelo clonado de esa voz.

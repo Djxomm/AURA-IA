@@ -1,0 +1,724 @@
+"""Motor de agente local, registro de aprobaciones diff y reversión de cambios."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import tempfile
+import uuid
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Awaitable, Callable
+
+from .config import AppSettings
+from .providers import LocalLLMClient, ProviderError, ToolCall
+from .skills import SkillStore
+from .storage import Storage
+from .tools import READ_TOOLS, TOOL_DEFINITIONS, WRITE_TOOLS, build_system_prompt, estimate_tokens
+from .workspace import SafeWorkspace, WorkspaceError
+
+
+EventEmitter = Callable[[str, dict[str, Any]], Awaitable[None] | None]
+ApprovalHandler = Callable[["PendingProposal"], Awaitable["ApprovalDecision"]]
+
+
+@dataclass
+class ApprovalDecision:
+    """Decisión humana sobre una propuesta de cambio en disco."""
+
+    approved: bool
+    feedback: str = ""
+
+
+@dataclass
+class PendingProposal:
+    """Propuesta de modificación con diff completo previo a escribir en disco."""
+
+    id: str
+    session_id: str
+    workspace_path: str
+    file_path: str
+    action: str
+    reason: str
+    original_content: str | None
+    proposed_content: str | None
+    base_hash: str
+    unified_diff: str
+    hunks: list[dict[str, Any]]
+    added_lines: int
+    removed_lines: int
+    status: str = "pending"
+    feedback: str = ""
+
+    def to_public_dict(self) -> dict[str, Any]:
+        """Serialización segura para UI y SSE (incluye preview acotado de contenido si aplica)."""
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "workspace_path": self.workspace_path,
+            "file_path": self.file_path,
+            "action": self.action,
+            "reason": self.reason,
+            "unified_diff": self.unified_diff,
+            "hunks": self.hunks,
+            "added_lines": self.added_lines,
+            "removed_lines": self.removed_lines,
+            "status": self.status,
+            "feedback": self.feedback,
+        }
+
+
+class ApprovalRegistry:
+    """Registro en memoria de propuestas esperando confirmación y runs activos."""
+
+    def __init__(self) -> None:
+        self._proposals: dict[str, tuple[PendingProposal, asyncio.Future[ApprovalDecision]]] = {}
+        self._runs: dict[str, tuple[asyncio.Event, set[str]]] = {}
+
+    @property
+    def has_active_runs(self):
+        return bool(self._runs)
+
+    def register_run(self, run_id: str) -> asyncio.Event:
+        ev = asyncio.Event()
+        self._runs[run_id] = (ev, set())
+        return ev
+
+    def cleanup_run(self, run_id: str) -> None:
+        info = self._runs.pop(run_id, None)
+        if not info:
+            return
+        _, prop_ids = info
+        for pid in prop_ids:
+            pair = self._proposals.pop(pid, None)
+            if pair:
+                _, fut = pair
+                if not fut.done():
+                    fut.set_result(ApprovalDecision(approved=False, feedback="Ejecución finalizada."))
+
+    def cancel_run(self, run_id: str) -> bool:
+        info = self._runs.get(run_id)
+        if not info:
+            return False
+        ev, prop_ids = info
+        ev.set()
+        for pid in list(prop_ids):
+            pair = self._proposals.get(pid)
+            if pair:
+                prop, fut = pair
+                if not fut.done():
+                    prop.status = "rejected"
+                    prop.feedback = "Cancelado por el usuario."
+                    fut.set_result(ApprovalDecision(approved=False, feedback="Cancelado por el usuario."))
+        return True
+
+    def register_proposal(
+        self,
+        proposal: PendingProposal,
+        *,
+        run_id: str | None = None,
+    ) -> asyncio.Future[ApprovalDecision]:
+        loop = asyncio.get_running_loop()
+        fut: asyncio.Future[ApprovalDecision] = loop.create_future()
+        self._proposals[proposal.id] = (proposal, fut)
+        if run_id and run_id in self._runs:
+            self._runs[run_id][1].add(proposal.id)
+        return fut
+
+    def get_proposal(self, proposal_id: str) -> PendingProposal | None:
+        pair = self._proposals.get(proposal_id)
+        return pair[0] if pair else None
+
+    def resolve_proposal(self, proposal_id: str, decision: ApprovalDecision) -> PendingProposal:
+        pair = self._proposals.get(proposal_id)
+        if not pair:
+            raise KeyError(f"Propuesta no encontrada o ya expirada: {proposal_id}")
+        proposal, fut = pair
+        if fut.done():
+            return proposal
+        proposal.status = "approved" if decision.approved else "rejected"
+        proposal.feedback = decision.feedback.strip()
+        fut.set_result(decision)
+        return proposal
+
+
+async def _emit(emitter: EventEmitter | None, event: str, data: dict[str, Any]) -> None:
+    if not emitter:
+        return
+    res = emitter(event, data)
+    if asyncio.iscoroutine(res):
+        await res
+
+
+def _truncate_text(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    kept = text[:max_chars]
+    omitted = len(text) - max_chars
+    return f"{kept}\n... [+{omitted} caracteres omitidos para ahorrar contexto]"
+
+
+def _normalize_action(tool_name: str) -> str:
+    return {
+        "create_file": "create",
+        "edit_file": "edit",
+        "write_file": "write",
+        "delete_file": "delete",
+    }[tool_name]
+
+
+class AgentEngine:
+    """Orquestador del ciclo de razonamiento, herramientas y confirmación humana."""
+
+    def __init__(
+        self,
+        storage: Storage,
+        llm_client: LocalLLMClient,
+        approval_registry: ApprovalRegistry,
+        skills_store: SkillStore | None = None,
+    ) -> None:
+        if skills_store is not None:
+            self.skills_store = skills_store
+        elif storage.db_path == ":memory:":
+            self.skills_store = SkillStore(Path(tempfile.mkdtemp(prefix="codigolocal_skills_")))
+        else:
+            self.skills_store = SkillStore(Path(storage.db_path).parent / "skills")
+        self.storage = storage
+        self.llm_client = llm_client
+        self.approval_registry = approval_registry
+
+    def _build_attached_context(
+        self,
+        workspace: SafeWorkspace,
+        attached_files: list[str],
+        settings: AppSettings,
+    ) -> str:
+        if not attached_files:
+            return ""
+        chunks: list[str] = []
+        for rel in attached_files[:4]:
+            try:
+                info = workspace.read_file(
+                    rel,
+                    start_line=1,
+                    end_line=settings.max_read_lines,
+                )
+                body = _truncate_text(info["numbered_excerpt"], settings.max_tool_output_chars)
+                chunks.append(
+                    f"[Archivo adjunto: {info['path']} (líneas {info['start_line']}-{info['end_line']} de {info['total_lines']})]\n{body}"
+                )
+            except WorkspaceError as exc:
+                chunks.append(f"[No se pudo adjuntar {rel}: {exc}]")
+        return "\n\n".join(chunks)
+
+    def _execute_read_tool(
+        self,
+        workspace: SafeWorkspace,
+        tc: ToolCall,
+        settings: AppSettings,
+    ) -> tuple[bool, str, str]:
+        args = tc.arguments
+        try:
+            if tc.name == "inspect_binary":
+                from .binary_inspection import inspect_binary
+                result = inspect_binary(workspace, str(args.get("path", "")))
+                return True, _truncate_text(json.dumps(result, ensure_ascii=False), settings.max_tool_output_chars), "Inspección binaria sin ejecutar el archivo"
+            if tc.name == "inspect_artifact":
+                from .artifact_inspect import inspect_artifact
+                result = inspect_artifact(
+                    workspace,
+                    str(args.get("path") or ""),
+                    mode=str(args.get("mode") or "summary"),
+                    max_items=int(args.get("max_items") or 30),
+                )
+                return True, _truncate_text(json.dumps(result, ensure_ascii=False), settings.max_tool_output_chars), f"Inspeccionó {result['path']}"
+            if tc.name == "read_skill":
+                result = self.skills_store.read(
+                    str(args.get("id", "")),
+                    int(args.get("offset", 0)),
+                    file=str(args.get("file") or "SKILL.md"),
+                    query=str(args.get("query") or ""),
+                )
+                return True, _truncate_text(json.dumps(result, ensure_ascii=False), max(settings.max_tool_output_chars, 2000)), "Leyó habilidad: " + result["name"]
+            if tc.name == "list_files":
+                res = workspace.list_files(
+                    path=str(args.get("path") or "."),
+                    max_depth=min(5, max(1, int(args.get("max_depth") or 3))),
+                    max_entries=160 if settings.compact_prompt else 250,
+                )
+                output = _truncate_text(res["text"], settings.max_tool_output_chars)
+                summary = f"Listó {len(res['entries'])} elementos en {res['base']}"
+                return True, output, summary
+
+            if tc.name == "read_file":
+                path = str(args.get("path") or "")
+                start = max(1, int(args.get("start_line") or 1))
+                requested_end = args.get("end_line")
+                max_span = settings.max_read_lines
+                end = int(requested_end) if requested_end is not None else (start + max_span - 1)
+                if end - start + 1 > max_span:
+                    end = start + max_span - 1
+                res = workspace.read_file(path, start_line=start, end_line=end)
+                header = (
+                    f"Archivo: {res['path']} (líneas {res['start_line']}-{res['end_line']} "
+                    f"de {res['total_lines']})"
+                )
+                body = _truncate_text(res["numbered_excerpt"], settings.max_tool_output_chars)
+                footer = (
+                    f"\n(Continúa desde línea {res['end_line'] + 1})"
+                    if res["truncated"]
+                    else ""
+                )
+                return True, f"{header}\n{body}{footer}", f"Leyó {res['path']} ({res['start_line']}-{res['end_line']})"
+
+            if tc.name == "search_in_files":
+                query = str(args.get("query") or "")
+                matches = workspace.search_in_files(
+                    query=query,
+                    path=str(args.get("path") or "."),
+                    file_pattern=str(args.get("file_pattern") or "*"),
+                    use_regex=bool(args.get("use_regex", False)),
+                    max_results=30 if settings.compact_prompt else 50,
+                )
+                if not matches:
+                    return True, f"Sin coincidencias para '{query}'.", f"Buscó '{query}' (0 resultados)"
+                lines = [f"{m['file']}:{m['line']}: {m['text']}" for m in matches]
+                output = _truncate_text("\n".join(lines), settings.max_tool_output_chars)
+                return True, output, f"Buscó '{query}' ({len(matches)} coincidencias)"
+
+            if tc.name == "get_file_info":
+                info = workspace.get_file_info(str(args.get("path") or ""))
+                return True, json.dumps(info, ensure_ascii=False), f"Info de {info['path']}"
+
+            return False, f"Herramienta desconocida: {tc.name}", f"Herramienta inválida {tc.name}"
+        except (WorkspaceError, ValueError, TypeError, OSError, KeyError) as exc:
+            return False, f"Error en {tc.name}: {exc}", f"Error en {tc.name}: {exc}"
+
+    def _prepare_proposal(
+        self,
+        *,
+        session_id: str,
+        workspace: SafeWorkspace,
+        tc: ToolCall,
+    ) -> PendingProposal:
+        args = tc.arguments
+        path = str(args.get("path") or "").strip()
+        reason = str(args.get("reason") or "Modificación propuesta por el agente.").strip()
+        action = _normalize_action(tc.name)
+
+        if tc.name == "create_file":
+            orig, prop, base_hash, diff = workspace.prepare_create(path, str(args.get("content") or ""))
+        elif tc.name == "edit_file":
+            orig, prop, base_hash, diff = workspace.prepare_edit(
+                path,
+                str(args.get("old_text") or ""),
+                str(args.get("new_text") or ""),
+            )
+        elif tc.name == "write_file":
+            orig, prop, base_hash, diff = workspace.prepare_write(path, str(args.get("content") or ""))
+        elif tc.name == "delete_file":
+            orig, prop, base_hash, diff = workspace.prepare_delete(path)
+        else:
+            raise WorkspaceError(f"Acción de escritura no soportada: {tc.name}")
+
+        rel_path = workspace.to_rel_posix(workspace.resolve_safe_path(path, allow_write=True))
+        return PendingProposal(
+            id=f"prop_{uuid.uuid4().hex[:12]}",
+            session_id=session_id,
+            workspace_path=str(workspace.root),
+            file_path=rel_path,
+            action=action,
+            reason=reason,
+            original_content=orig,
+            proposed_content=prop,
+            base_hash=base_hash,
+            unified_diff=diff["unified_diff"],
+            hunks=diff["hunks"],
+            added_lines=diff["added"],
+            removed_lines=diff["removed"],
+        )
+
+    async def run_turn(
+        self,
+        *,
+        session_id: str,
+        user_message: str,
+        settings: AppSettings,
+        attached_files: list[str] | None = None,
+        emit: EventEmitter | None = None,
+        approval_handler: ApprovalHandler | None = None,
+        cancel_event: asyncio.Event | None = None,
+        run_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Ejecuta un turno completo del agente con streaming, herramientas y aprobación de diffs."""
+        try:
+            workspace = SafeWorkspace(settings.workspace_path)
+        except WorkspaceError as exc:
+            await _emit(emit, "error", {"message": str(exc)})
+            return {"status": "error", "error": str(exc)}
+
+        attachments = attached_files or []
+        attached_context = self._build_attached_context(workspace, attachments, settings)
+        history = self.storage.get_messages(session_id, limit=settings.max_history_messages)
+        original = self.storage.get_first_user_message(session_id)
+        if original and not any(item['id'] == original['id'] for item in history):
+            history.insert(0, original)
+
+        self.storage.add_message(
+            session_id,
+            "user",
+            user_message,
+            metadata={"attached_files": attachments} if attachments else {},
+        )
+
+        # Actualizar título automático de la sesión si aún tiene el nombre genérico
+        session = self.storage.get_session(session_id)
+        if session and session.get("title") in ("Nueva sesión", ""):
+            snippet = " ".join(user_message.strip().split())[:48]
+            if snippet:
+                self.storage.update_session(session_id, title=snippet)
+
+        system_prompt = build_system_prompt(
+            str(workspace.root),
+            include_xml_protocol=(settings.tool_mode == "xml"),
+            compact=settings.compact_prompt,
+        )
+        from .aura_api import effort_instruction
+        system_prompt += "\n" + effort_instruction(settings)
+        system_prompt += self.skills_store.manifest()
+        conversation: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+        for item in history:
+            role = item["role"]
+            if role in ("user", "assistant") and item["content"]:
+                conversation.append({"role": role, "content": item["content"]})
+
+        prompt_for_model = (
+            f"{user_message}\n\n{attached_context}" if attached_context else user_message
+        )
+        conversation.append({"role": "user", "content": prompt_for_model})
+
+        total_tokens = 0
+        total_elapsed_ms = 0
+        last_tok_per_sec = 0.0
+        last_mode = settings.tool_mode
+        tool_traces: list[dict[str, Any]] = []
+        final_content = ""
+
+        for step in range(1, settings.max_steps + 1):
+            if cancel_event and cancel_event.is_set():
+                await _emit(emit, "error", {"message": "Generación cancelada por el usuario."})
+                return {"status": "cancelled", "content": final_content}
+
+            est_tokens = estimate_tokens(conversation)
+            await _emit(
+                emit,
+                "context_stats",
+                {
+                    "estimated_tokens": est_tokens,
+                    "num_ctx": settings.num_ctx,
+                    "step": step,
+                    "max_steps": settings.max_steps,
+                },
+            )
+
+            async def _on_tok(delta: str) -> None:
+                if cancel_event and cancel_event.is_set():
+                    raise asyncio.CancelledError()
+                await _emit(emit, "token", {"text": delta, "step": step})
+
+            try:
+                response = await self.llm_client.stream_chat(
+                    settings=settings,
+                    messages=conversation,
+                    tools=TOOL_DEFINITIONS,
+                    on_token=_on_tok,
+                )
+            except asyncio.CancelledError:
+                await _emit(emit, "error", {"message": "Generación cancelada por el usuario."})
+                return {"status": "cancelled", "content": final_content}
+            except ProviderError as exc:
+                await _emit(emit, "error", {"message": str(exc)})
+                return {"status": "error", "error": str(exc)}
+            except Exception as exc:
+                msg = f"Error inesperado del motor local: {exc}"
+                await _emit(emit, "error", {"message": msg})
+                return {"status": "error", "error": msg}
+
+            total_tokens += response.tokens_generated
+            total_elapsed_ms += response.elapsed_ms
+            if response.tok_per_sec:
+                last_tok_per_sec = response.tok_per_sec
+            last_mode = response.used_tool_mode
+
+            if not response.tool_calls:
+                final_content = response.content or "(Sin respuesta de texto del modelo)"
+                self.storage.add_message(
+                    session_id,
+                    "assistant",
+                    final_content,
+                    metadata={
+                        "tokens_generated": total_tokens,
+                        "elapsed_ms": total_elapsed_ms,
+                        "tok_per_sec": last_tok_per_sec,
+                        "tool_mode": last_mode,
+                        "tools": tool_traces,
+                    },
+                )
+                await _emit(
+                    emit,
+                    "done",
+                    {
+                        "content": final_content,
+                        "tokens_generated": total_tokens,
+                        "elapsed_ms": total_elapsed_ms,
+                        "tok_per_sec": last_tok_per_sec,
+                        "used_tool_mode": last_mode,
+                        "steps": step,
+                    },
+                )
+                return {
+                    "status": "done",
+                    "content": final_content,
+                    "tokens_generated": total_tokens,
+                    "elapsed_ms": total_elapsed_ms,
+                    "tok_per_sec": last_tok_per_sec,
+                    "steps": step,
+                }
+
+            # Si el modelo emitió bloques XML sin texto útil, limpiamos el buffer temporal en UI
+            if response.used_tool_mode == "xml" and "<tool_call>" in response.raw_content:
+                await _emit(emit, "stream_clean", {"content": response.content, "step": step})
+
+            assistant_tool_calls_payload = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.name,
+                        "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                    },
+                }
+                for tc in response.tool_calls
+            ]
+            conversation.append(
+                {
+                    "role": "assistant",
+                    "content": response.content,
+                    "tool_calls": assistant_tool_calls_payload,
+                }
+            )
+
+            for tc in response.tool_calls:
+                if cancel_event and cancel_event.is_set():
+                    await _emit(emit, "error", {"message": "Ejecución cancelada por el usuario."})
+                    return {"status": "cancelled", "content": final_content}
+
+                if tc.name in READ_TOOLS:
+                    await _emit(
+                        emit,
+                        "tool_start",
+                        {"id": tc.id, "name": tc.name, "arguments": tc.arguments},
+                    )
+                    ok, tool_output, summary = self._execute_read_tool(workspace, tc, settings)
+                    tool_traces.append({"name": tc.name, "ok": ok, "summary": summary})
+                    await _emit(
+                        emit,
+                        "tool_result",
+                        {"id": tc.id, "name": tc.name, "ok": ok, "summary": summary},
+                    )
+                    conversation.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "name": tc.name,
+                            "content": tool_output,
+                        }
+                    )
+                    continue
+
+                if tc.name in WRITE_TOOLS:
+                    await _emit(
+                        emit,
+                        "tool_start",
+                        {"id": tc.id, "name": tc.name, "arguments": {"path": tc.arguments.get("path")}},
+                    )
+                    try:
+                        proposal = self._prepare_proposal(
+                            session_id=session_id,
+                            workspace=workspace,
+                            tc=tc,
+                        )
+                    except WorkspaceError as exc:
+                        err_text = f"No se pudo preparar el cambio en {tc.name}: {exc}"
+                        tool_traces.append({"name": tc.name, "ok": False, "summary": err_text})
+                        await _emit(
+                            emit,
+                            "tool_result",
+                            {"id": tc.id, "name": tc.name, "ok": False, "summary": err_text},
+                        )
+                        conversation.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "name": tc.name,
+                                "content": err_text,
+                            }
+                        )
+                        continue
+
+                    # Registrar en DB como pendiente y esperar confirmación humana
+                    self.storage.add_change_record(
+                        change_id=proposal.id,
+                        session_id=session_id,
+                        workspace_path=proposal.workspace_path,
+                        file_path=proposal.file_path,
+                        action=proposal.action,
+                        reason=proposal.reason,
+                        before_content=proposal.original_content,
+                        after_content=proposal.proposed_content,
+                        unified_diff=proposal.unified_diff,
+                        added_lines=proposal.added_lines,
+                        removed_lines=proposal.removed_lines,
+                        status="pending",
+                    )
+                    await _emit(emit, "proposal", proposal.to_public_dict())
+
+                    if approval_handler is not None:
+                        decision = await approval_handler(proposal)
+                    else:
+                        fut = self.approval_registry.register_proposal(proposal, run_id=run_id)
+                        decision = await fut
+
+                    if decision.approved:
+                        try:
+                            workspace.apply_change(
+                                proposal.file_path,
+                                proposal.action,
+                                proposal.proposed_content,
+                                proposal.base_hash,
+                            )
+                            proposal.status = "applied"
+                            self.storage.resolve_change_record(
+                                proposal.id,
+                                status="applied",
+                                feedback=decision.feedback,
+                            )
+                            msg_to_llm = (
+                                f"Cambio aprobado y aplicado correctamente en '{proposal.file_path}' "
+                                f"(+{proposal.added_lines}/-{proposal.removed_lines})."
+                            )
+                            summary = f"Aplicado en {proposal.file_path}"
+                            ok_flag = True
+                        except WorkspaceError as exc:
+                            proposal.status = "error"
+                            proposal.feedback = str(exc)
+                            self.storage.resolve_change_record(
+                                proposal.id,
+                                status="error",
+                                feedback=str(exc),
+                            )
+                            msg_to_llm = f"Error al aplicar cambio en '{proposal.file_path}': {exc}"
+                            summary = msg_to_llm
+                            ok_flag = False
+                    else:
+                        proposal.status = "rejected"
+                        proposal.feedback = decision.feedback
+                        self.storage.resolve_change_record(
+                            proposal.id,
+                            status="rejected",
+                            feedback=decision.feedback,
+                        )
+                        fb_note = f" Comentario del usuario: {decision.feedback}" if decision.feedback else ""
+                        msg_to_llm = (
+                            f"El usuario RECHAZÓ el cambio propuesto en '{proposal.file_path}'.{fb_note} "
+                            "No se modificó el archivo. Propón una alternativa o pregunta qué prefiere."
+                        )
+                        summary = f"Rechazado: {proposal.file_path}"
+                        ok_flag = False
+
+                    tool_traces.append({"name": tc.name, "ok": ok_flag, "summary": summary})
+                    await _emit(
+                        emit,
+                        "proposal_resolved",
+                        {
+                            "id": proposal.id,
+                            "file_path": proposal.file_path,
+                            "action": proposal.action,
+                            "status": proposal.status,
+                            "feedback": proposal.feedback,
+                        },
+                    )
+                    await _emit(
+                        emit,
+                        "tool_result",
+                        {"id": tc.id, "name": tc.name, "ok": ok_flag, "summary": summary},
+                    )
+                    conversation.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "name": tc.name,
+                            "content": msg_to_llm,
+                        }
+                    )
+                    continue
+
+                # Herramienta desconocida
+                err_unknown = f"Herramienta no reconocida: '{tc.name}'."
+                await _emit(
+                    emit,
+                    "tool_result",
+                    {"id": tc.id, "name": tc.name, "ok": False, "summary": err_unknown},
+                )
+                conversation.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "name": tc.name,
+                        "content": err_unknown,
+                    }
+                )
+
+        # Se alcanzó max_steps sin respuesta final limpia
+        fallback_msg = (
+            f"Se alcanzó el límite de {settings.max_steps} pasos en este turno para cuidar el contexto "
+            "del modelo local. Puedes pedir que continúe en el siguiente mensaje."
+        )
+        self.storage.add_message(
+            session_id,
+            "assistant",
+            fallback_msg,
+            metadata={
+                "tokens_generated": total_tokens,
+                "elapsed_ms": total_elapsed_ms,
+                "tok_per_sec": last_tok_per_sec,
+                "tools": tool_traces,
+            },
+        )
+        await _emit(
+            emit,
+            "done",
+            {
+                "content": fallback_msg,
+                "tokens_generated": total_tokens,
+                "elapsed_ms": total_elapsed_ms,
+                "tok_per_sec": last_tok_per_sec,
+                "used_tool_mode": last_mode,
+                "steps": settings.max_steps,
+            },
+        )
+        return {"status": "done", "content": fallback_msg, "steps": settings.max_steps}
+
+    def revert_change(self, change_id: str) -> dict[str, Any]:
+        """Revierte un cambio aplicado en disco al estado previo registrado."""
+        record = self.storage.get_change(change_id)
+        if not record:
+            raise WorkspaceError(f"Cambio no encontrado: {change_id}")
+        if record["status"] != "applied":
+            raise WorkspaceError(
+                f"Solo se pueden revertir cambios en estado 'applied' (estado actual: {record['status']})."
+            )
+        workspace = SafeWorkspace(record["workspace_path"])
+        workspace.revert_change(record["file_path"], record["before_content"])
+        updated = self.storage.mark_change_reverted(change_id)
+        return updated or record

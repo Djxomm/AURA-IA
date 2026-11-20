@@ -98,3 +98,19 @@ AURAX admite verificar archivos C/C++, compilar un archivo a EXE y ejecutar el r
 Abre un archivo `.iss` y pulsa **Crear instalador** para invocar Inno Setup 7.1.1. Revisa los scripts de terceros antes de autorizarlos: sus directivas pueden ejecutar procesos. El paquete incluye el compilador y sus avisos de licencia.
 
 Para preparar estas herramientas al construir desde código fuente, instala o extrae w64devkit bajo `runtime/herramientas/w64devkit` e Inno Setup bajo `runtime/herramientas/inno`; los ejecutables deben ser `bin/g++.exe` e `ISCC.exe`. La instalación del modelo sigue usando `scripts/prepare_runtime.py`.
+
+## Bases de datos SQL · uso sencillo
+
+1. Abre **Bases de datos SQL** y elige el motor.
+2. Selecciona el archivo SQLite o completa los datos del servidor y pulsa **Conectar**.
+3. Elige una tabla para ver su estructura. Escribe una consulta o pulsa **Pedir ayuda a AURAX**. Revisa el SQL antes de ejecutarlo.
+
+Los ajustes avanzados se muestran bajo demanda. **Permitir cambios** habilita instrucciones de escritura; cada ejecución muestra una confirmación. Las consultas se ejecutan en segundo plano. Las contraseñas de conexión no se guardan en archivos ni se incorporan a mensajes del asistente. Solo se comparte la estructura seleccionada y el SQL del editor cuando se pulsa Pedir ayuda; el mensaje queda editable antes de enviarlo.
+
+Conectores incluidos: SQLite, SQL Server/Express (pyodbc), PostgreSQL (pg8000), MySQL/MariaDB (PyMySQL) y Oracle (oracledb Thin). La opción ODBC/DSN permite otros motores con un controlador de Windows de 64 bits. SQL Server necesita además un [controlador ODBC compatible instalado en Windows](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server). La compatibilidad de versiones depende del controlador y del [dialecto de SQLAlchemy](https://docs.sqlalchemy.org/en/20/dialects/); no se garantizan todas las versiones históricas o futuras. Oracle antiguo puede conectarse mediante un DSN/cliente compatible.
+
+Probado con operaciones reales de SQLite, incluyendo consultas, escrituras, protección de archivo de solo lectura y respaldo verificado. Se comprobó también la carga de los cinco conectores restantes, sin afirmar una prueba real contra servidores remotos. La verificación del EXE se puede ejecutar con `--sql-self-test --data-dir CARPETA_DE_PRUEBA`.
+
+Límites: una instrucción por ejecución, hasta 12000 caracteres de SQL, 500 filas, 100 columnas y 2000 caracteres por celda. Exportar CSV guarda las filas mostradas y protege campos que una hoja de cálculo podría interpretar como fórmulas. No es un respaldo completo. El botón de respaldo es para SQLite; otros motores usan herramientas nativas.
+
+Los filtros de consultas no sustituyen los permisos del servidor: usa una cuenta de solo lectura cuando corresponda. DDL puede confirmar cambios automáticamente en algunos motores. Conserva un respaldo antes de modificar datos o estructuras. Las excepciones de certificados del explorador web no se aplican a las bases de datos.

@@ -11,3 +11,5 @@ La licencia MIT del proyecto se aplica al código original de AURA, no sustituye
 - ElevenLabs: servicio externo opcional sujeto a la cuenta y condiciones del usuario. No se incluye su voz como modelo local.
 
 Los textos de licencias disponibles se conservan en `licenses/`. No se incluyen claves ni grabaciones de referencia en el repositorio.
+
+- SQLAlchemy, pg8000, PyMySQL, pyodbc, python-oracledb, sqlparse y dependencias: versiones y textos de licencia en `licenses/sql-drivers/`. Los controladores nativos ODBC de otros fabricantes se instalan por separado.

@@ -86,7 +86,7 @@ class Window(QMainWindow):
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
   self.setWindowTitle('AURA · Inteligencia Artificial — Escritorio');self.setWindowIcon(QIcon(str(ASSETS/'aura-icono-transparente.png')));self.resize(1180,760);self.setMinimumSize(760,540)
   split=QSplitter();self.setCentralWidget(split);side=QWidget();side.setObjectName('sidebar');side.setMinimumWidth(220);side.setMaximumWidth(330);sl=QVBoxLayout(side);sl.setSpacing(3);sl.setContentsMargins(12,16,12,12);brand=QLabel('AURA IA');brand.setObjectName('brand');sl.addWidget(brand);sl.addWidget(QLabel('INTELIGENCIA ARTIFICIAL · LOCAL'))
-  for title,fn in [('＋ Nueva conversación',self.new_chat),('⌘ AURAX · Codificador',self.open_aurax),('◎ Explorador de Internet',self.open_browser),('◈ Modelos',self.models),('⚙ Pensamiento y ajustes',self.settings),('▣ Proyecto y archivos',self.project),('✧ Habilidades',self.skills_panel),('◉ Memoria',self.memory_panel),('♫ Voz y audio',self.voice_settings),('›_ Terminal y compilación',self.terminal),('↶ Cambios y deshacer',self.changes)]:
+  for title,fn in [('＋ Nueva conversación',self.new_chat),('⌘ AURAX · Codificador',self.open_aurax),('▤ Bases de datos SQL',self.open_sql),('◎ Explorador de Internet',self.open_browser),('◈ Modelos',self.models),('⚙ Pensamiento y ajustes',self.settings),('▣ Proyecto y archivos',self.project),('✧ Habilidades',self.skills_panel),('◉ Memoria',self.memory_panel),('♫ Voz y audio',self.voice_settings),('›_ Terminal y compilación',self.terminal),('↶ Cambios y deshacer',self.changes)]:
    nav=btn(title,fn);nav.setObjectName('newChatButton' if title.startswith('＋') else 'navButton');sl.addWidget(nav)
   self.search=QLineEdit();self.search.setPlaceholderText('Buscar conversación…');self.search.textChanged.connect(self.filter_history);sl.addWidget(self.search);self.history=QListWidget();self.history.itemClicked.connect(self.select_chat);sl.addWidget(self.history)
   right=QWidget();rl=QVBoxLayout(right);top=QHBoxLayout();self.heading=QLabel('Nueva conversación');self.heading.setObjectName('chatTitle');self.heading.setFont(QFont('Segoe UI',14,QFont.Weight.Bold));top.addWidget(self.heading,1);self.mode=QComboBox();self.mode.addItems(['Conversación','AURAX · Programación']);top.addWidget(self.mode);self.temporary=QCheckBox('Temporal');self.temporary.setToolTip('Sin guardar conversación ni usar memoria.');top.addWidget(self.temporary);rl.addLayout(top)
@@ -99,6 +99,13 @@ class Window(QMainWindow):
   self.floating=FloatingAssistant(self)
   self.new_chat();self.refresh_history();self.timer=QTimer(self);self.timer.timeout.connect(self.progress);self.timer.start(300)
   self.startup=None;self.startup_finished=False;self.attached_files=[];self.aurax=None;self.aurax_dock=None;self.mode.currentIndexChanged.connect(lambda index:self.open_aurax() if index==1 else None)
+ def open_sql(self):
+  from agente_ia.native_sql import SqlWindow
+  if (ROOT/'skills/bases-sql/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','bases-sql')
+  panel=getattr(self,'sql_panel',None)
+  if panel is None:
+   panel=SqlWindow(self);self.sql_panel=panel;panel.destroyed.connect(lambda:setattr(self,'sql_panel',None));panel.setWindowIcon(self.windowIcon())
+  panel.show();panel.raise_();panel.activateWindow()
  def open_browser(self):
   from agente_ia.native_browser import BrowserWindow
   browser=BrowserWindow(self);browser.setWindowIcon(self.windowIcon());browser.show()
@@ -425,6 +432,8 @@ class Window(QMainWindow):
    except Exception as e:self.error(e)
   l.addWidget(btn('Guardar configuración de voz',save));l.addWidget(btn('Eliminar clave guardada',lambda:(self.voice_key.delete(),key.clear(),mode.setCurrentIndex(0),self.save_pref('voice_mode','local'))));d.exec()
  def closeEvent(self,event):
+  panel=getattr(self,'sql_panel',None)
+  if panel is not None and panel.job is not None:QMessageBox.information(self,'Base de datos','Espera a que termine la operación SQL antes de cerrar AURA.');event.ignore();return
   if self.aurax is not None and any(self.aurax.tabs.widget(i).document().isModified() for i in range(self.aurax.tabs.count())) and QMessageBox.question(self,'AURAX','Hay cambios sin guardar en el editor. ¿Cerrar y descartarlos?')!=QMessageBox.StandardButton.Yes:event.ignore();return
   if (self.busy or self.warming) and QMessageBox.question(self,'Cerrar AURA','Se detendrá la tarea en curso. ¿Cerrar?')!=QMessageBox.StandardButton.Yes:event.ignore();return
   if self.aurax is not None:self.aurax.stop_process()
@@ -439,11 +448,31 @@ def self_test(data):
  (folder/'verificacion-nativa.json').write_text(json.dumps({'native_window':True,'server_started':False,'real_answer':answer,'initial_preparation_seconds':preparation,'first_text_after_preparation_seconds':client.first_text,'response_total_seconds':elapsed,'memory_restart_and_forget':True,'target_i5_physically_tested':False},ensure_ascii=False,indent=2),'utf-8')
  return 0
 
+def sql_self_test(data):
+ import sqlite3,tempfile
+ from sqlalchemy import create_engine
+ from agente_ia.sql_manager import ConnectionConfig,SqlManager,connection_url,backup_sqlite
+ folder=Path(data).resolve();folder.mkdir(parents=True,exist_ok=True);drivers=[]
+ with tempfile.TemporaryDirectory(dir=folder) as temporary:
+  path=Path(temporary)/'prueba.db'
+  with sqlite3.connect(path) as connection:connection.execute('CREATE TABLE prueba(valor INTEGER)')
+  connection.close()
+  manager=SqlManager(ConnectionConfig('SQLite',database=str(path)))
+  manager.perform('query',sql='INSERT INTO prueba VALUES(7)',allow_changes=True)
+  assert manager.perform('query',sql='SELECT valor FROM prueba')['rows']==[['7']]
+  backup_sqlite(path,Path(temporary)/'respaldo.db')
+  for motor in ['SQL Server','PostgreSQL','MySQL','MariaDB','Oracle']:
+   url,arguments=connection_url(ConnectionConfig(motor,database='prueba',user='test',password='temporary'))
+   engine=create_engine(url,connect_args=arguments);drivers.append(motor);engine.dispose()
+ (folder/'sql-verificacion.json').write_text(json.dumps({'sqlite_query_write_backup':True,'drivers_loaded':drivers,'remote_servers_tested':False},indent=2),'utf-8')
+ return 0
+
 def main():
  if os.name=='nt':
   import ctypes
   ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('AURA.InteligenciaArtificial.3')
- parser=argparse.ArgumentParser();parser.add_argument('--data-dir');parser.add_argument('--ui-proof');parser.add_argument('--self-test',action='store_true');args=parser.parse_args();data=args.data_dir or str(Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'AURA_IA')
+ parser=argparse.ArgumentParser();parser.add_argument('--data-dir');parser.add_argument('--ui-proof');parser.add_argument('--self-test',action='store_true');parser.add_argument('--sql-self-test',action='store_true');args=parser.parse_args();data=args.data_dir or str(Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'AURA_IA')
+ if args.sql_self_test:return sql_self_test(data)
  if args.self_test:return self_test(data)
  app=QApplication(sys.argv[:1]);app.setWindowIcon(QIcon(str(ASSETS/'aura.ico')));app.setStyle('Fusion');app.setStyleSheet(STYLE);window=Window(data)
  if args.ui_proof:

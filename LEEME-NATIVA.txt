@@ -1,4 +1,4 @@
-﻿AURA Inteligencia Artificial 3.2.0 — Escritorio nativo Windows 10 x64
+﻿AURA Inteligencia Artificial 3.3.0 — Escritorio nativo Windows 10 x64
 
 Ventana propia Qt. No inicia un navegador externo ni un servidor web para la interfaz. El explorador integrado de Internet es opcional. Motor CPU Qwen2.5-Coder 1.5B Q4_K_M con bibliotecas SSE4.2/x64; no utiliza AVX ni CUDA para generar texto. Ajuste inicial: 2 hilos. El i5 de primera generación de destino no se ha probado físicamente.
 
@@ -31,3 +31,13 @@ AURAX 3.1: pulsa AURAX · Codificador en la barra lateral. Abre un proyecto, haz
 Novedades 3.2: Explorador de Internet en el menú lateral. Ante certificados inválidos permite aceptar expresamente bajo tu responsabilidad, cuando Chromium lo permite. Cancelar es la opción inicial. La excepción y los datos de navegación duran la sesión del explorador y se eliminan al cerrar. No desactiva TLS globalmente ni modifica certificados de Windows. Las descargas y permisos de dispositivos están bloqueados en esta versión.
 
 C/C++: abre un archivo .cpp o .c en AURAX y pulsa Verificar o Compilar EXE. Ejecutar usa el EXE previamente compilado en dist. Incluye w64devkit 2.11.0; los proyectos con varias unidades o dependencias requieren configuración adicional. Inno Setup: abre un script .iss y pulsa Crear instalador. Se pide autorización para ejecutarlo. Incluye Inno Setup 7.1.1 y sus licencias. El instalador de AURA también se genera con Inno Setup.
+
+Bases SQL 3.3: abre Bases de datos SQL, elige un motor y completa los datos. SQLite solo requiere seleccionar un archivo existente. Los ajustes avanzados se muestran bajo demanda. La contraseña se utiliza en memoria durante la sesión del panel; no se guarda en archivos, conversaciones ni memoria del asistente. Desconectar elimina la referencia de la sesión. No se promete borrado criptográfico de la RAM.
+
+Incluye conectores para SQL Server/Express (pyodbc; requiere controlador ODBC de 64 bits instalado en Windows), PostgreSQL (pg8000), MySQL/MariaDB (PyMySQL), SQLite y Oracle (oracledb Thin). Para otros motores utiliza un DSN ODBC de 64 bits compatible. El controlador y el servidor determinan las versiones admitidas; no se garantiza toda versión histórica o futura. Se probaron operaciones reales SQLite y la carga de los cinco conectores adicionales; los servidores remotos requieren prueba con tus equipos y cuentas.
+
+Selecciona una tabla para ver columnas y tipos. Escribe una sola instrucción (hasta 12000 caracteres) y pulsa Ejecutar para revisarla. Permitir cambios habilita instrucciones de escritura con confirmación; DDL puede ser irreversible o confirmar automáticamente según el motor. El modo de consultas aplica filtros conservadores y usa lectura en SQLite y transacciones de lectura donde es posible. Utiliza una cuenta de solo lectura para imponer los permisos en el servidor; los filtros del cliente no sustituyen esos permisos.
+
+Se muestran hasta 500 filas, 100 columnas y 2000 caracteres por celda. Exportar CSV guarda solo las filas visibles y no es un respaldo completo. Respaldo SQLite crea un archivo nuevo y verifica su integridad. Para respaldos/restauraciones de otros motores usa sus utilidades nativas y prueba la restauración en una base separada. Las operaciones SQL se ejecutan en segundo plano; los tiempos de espera dependen también del controlador. No cierres el programa mientras hay una operación activa.
+
+Pedir ayuda a AURAX prepara un mensaje editable con el motor, la estructura seleccionada y el SQL del editor. No incorpora las filas obtenidas ni la contraseña de conexión. Revisa el mensaje y pulsa Enviar. Usar SQL de AURA carga su propuesta como borrador, nunca la ejecuta automáticamente. La habilidad Bases de datos SQL se incluye para orientar las propuestas. La conexión cifrada verifica certificados; las excepciones del explorador web no se aplican a bases de datos.

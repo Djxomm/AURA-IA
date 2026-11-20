@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('agente_ia/static/assets', 'agente_ia/static/assets')]
 binaries = []
-hiddenimports = []
+hiddenimports = ['sqlalchemy.dialects.sqlite.pysqlite','sqlalchemy.dialects.postgresql.pg8000','sqlalchemy.dialects.mysql.pymysql','sqlalchemy.dialects.mysql.mariadb','sqlalchemy.dialects.mssql.pyodbc','sqlalchemy.dialects.oracle.oracledb','pg8000','pymysql','pyodbc','oracledb']
 tmp_ret = collect_all('vosk')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('sounddevice')

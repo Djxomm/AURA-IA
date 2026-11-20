@@ -1,0 +1,72 @@
+[
+  {
+    "name": "SQLAlchemy",
+    "version": "2.0.58",
+    "license": "MIT"
+  },
+  {
+    "name": "pg8000",
+    "version": "1.31.6",
+    "license": "BSD 3-Clause License"
+  },
+  {
+    "name": "PyMySQL",
+    "version": "1.2.4",
+    "license": "MIT"
+  },
+  {
+    "name": "pyodbc",
+    "version": "5.5.0",
+    "license": "MIT-0"
+  },
+  {
+    "name": "oracledb",
+    "version": "26.1.0",
+    "license": "UPL-1.0 OR Apache-2.0"
+  },
+  {
+    "name": "sqlparse",
+    "version": "0.6.1",
+    "license": "See bundled license"
+  },
+  {
+    "name": "scramp",
+    "version": "1.5.0",
+    "license": "MIT-0"
+  },
+  {
+    "name": "asn1crypto",
+    "version": "1.5.1",
+    "license": "MIT"
+  },
+  {
+    "name": "python-dateutil",
+    "version": "4.0.0",
+    "license": "BSD-3-Clause"
+  },
+  {
+    "name": "cryptography",
+    "version": "50.0.2",
+    "license": "Apache-2.0 OR BSD-3-Clause"
+  },
+  {
+    "name": "cffi",
+    "version": "2.1.1",
+    "license": "MIT-0"
+  },
+  {
+    "name": "pycparser",
+    "version": "3.12",
+    "license": "BSD-3-Clause"
+  },
+  {
+    "name": "greenlet",
+    "version": "3.5.6",
+    "license": "MIT AND PSF-2.0"
+  },
+  {
+    "name": "typing_extensions",
+    "version": "4.16.0",
+    "license": "PSF-2.0"
+  }
+]

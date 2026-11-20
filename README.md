@@ -6,6 +6,14 @@ Asistente de escritorio para **Windows 10 x64**, con programación local, memori
 
 La interfaz principal tiene una distribución de chat en azul oscuro, con navegación lateral compacta. Utiliza PySide6/Qt: no abre navegador ni inicia un servidor web. El motor de texto se comunica por procesos locales y está preparado con bibliotecas CPU SSE4.2/x64 para equipos antiguos. El objetivo de desarrollo incluye un i5 de primera generación y 16 GB RAM; todavía falta probar ese equipo físico.
 
+## AURAX · Codificador integrado
+
+Abre **AURAX · Codificador** en la barra lateral. Incluye explorador del proyecto, editor por pestañas con colores de código, archivos nuevos, guardado con revisión de diferencias y adjuntos al agente. La consola permite verificar y ejecutar Python y generar un EXE con PyInstaller, siempre con autorización.
+
+El agente utiliza el mismo modelo local y las aprobaciones de cambios. Las respuestas sin archivos aplicados se identifican como tales. **Revisar código IA** abre un bloque de la respuesta como borrador, sin escribirlo hasta que se revise y guarde.
+
+Se comprobó una compilación desde el panel y se ejecutó el EXE resultante. Un modelo pequeño puede equivocarse en rutas o código; revisa las propuestas. La preparación de una tarea de programación larga puede tardar bastante más que una consulta corta con caché.
+
 ## Funciones
 
 - Conversación y modo Programación, propuestas de cambios con revisión, historial y deshacer.

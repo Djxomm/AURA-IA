@@ -302,6 +302,14 @@ def parse_xml_tool_calls(text: str) -> tuple[str, list[dict[str, Any]]]:
             spans.append(match.span())
 
     if not spans:
+        # Some small coder models emit the requested tool object as a sole JSON
+        # fence. Accept only that unambiguous envelope and known project tools;
+        # prose examples and arbitrary JSON remain ordinary response text.
+        fenced = re.fullmatch(r"\s*```json\s*(\{.*\})\s*```\s*", text, re.DOTALL | re.IGNORECASE)
+        if fenced:
+            obj = _try_parse_json_obj(fenced.group(1))
+            if obj and set(obj) <= {"name", "arguments"} and obj.get("name") in READ_TOOLS | WRITE_TOOLS and isinstance(obj.get("arguments"), dict):
+                return "", [{"id": "json_" + uuid.uuid4().hex[:10], "name": obj["name"], "arguments": obj["arguments"]}]
         return text, []
 
     # Remover únicamente los bloques reconocidos para conservar el texto humano restante

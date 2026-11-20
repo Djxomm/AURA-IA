@@ -1,4 +1,4 @@
-﻿AURA Inteligencia Artificial 3.0 — Escritorio nativo Windows 10 x64
+﻿AURA Inteligencia Artificial 3.0.1 — Escritorio nativo Windows 10 x64
 
 Ventana propia Qt. No inicia un navegador ni un servidor web. Motor CPU Qwen2.5-Coder 1.5B Q4_K_M con bibliotecas SSE4.2/x64; no utiliza AVX ni CUDA para generar texto. Ajuste inicial: 2 hilos. El i5 de primera generación de destino no se ha probado físicamente.
 
@@ -23,3 +23,5 @@ Herramientas: incluye Python y PyInstaller para compilar proyectos Python. Cada 
 El instalador no está firmado. Desinstalar conserva la información del usuario. Licencias incluidas en licencias. Aplicación independiente de OpenAI Codex.
 
 Contexto: la barra permite elegir de 2048 a 8192 tokens; se recomiendan 4096 para el i5. Si activas la ampliación automática se puede usar hasta 8192 al necesitar más espacio. El historial completo sigue guardado; el modelo recibe el inicio de la tarea y los turnos recientes. Un texto que exceda incluso ese límite debe dividirse o consultarse por partes.
+
+Arranque 3.0.1: el video aparece antes del chat y se reproduce durante la preparación del modelo. Al estar listo pasa al chat automáticamente. Continuar mientras carga omite la animación sin cancelar la preparación. La interfaz principal es azul oscuro con navegación compacta e historial lateral.

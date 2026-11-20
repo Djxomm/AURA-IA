@@ -17,6 +17,30 @@ from agente_ia.skills import SkillStore
 ROOT=Path(sys.executable).parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parent/'runtime'
 ASSETS=Path(__file__).resolve().parent/'agente_ia/static/assets'
 STYLE='''QWidget{background:#07101e;color:#e5edf9;font-family:Segoe UI;font-size:13px;} QMainWindow,QDialog{background:#07101e;} QPushButton{background:#10253a;border:1px solid #24506a;border-radius:8px;padding:10px 13px;} QPushButton:hover{background:#164052;border-color:#00d8e6;} QPushButton:pressed{background:#086578;} QPushButton:disabled{color:#8493a8;background:#14202c;} QLineEdit,QPlainTextEdit,QTextBrowser,QListWidget,QTreeView,QComboBox,QSpinBox,QDoubleSpinBox{background:#0b1829;border:1px solid #234258;border-radius:8px;padding:8px;selection-background-color:#126176;selection-color:white;} QListWidget::item{padding:9px;} QListWidget::item:selected{background:#16455a;color:white;} QLabel#brand{font-size:25px;font-weight:bold;color:#00e9f1;} QLabel#status{color:#91dce1;padding:6px;} QSplitter::handle{background:#183446;width:2px;} QCheckBox{padding:5px;} QScrollBar:vertical{background:#091524;width:10px;} QScrollBar::handle:vertical{background:#28566b;min-height:28px;border-radius:4px;}'''
+STYLE += """
+QWidget{background:#0b1424;color:#e4eaf4;}
+QMainWindow,QDialog{background:#0b1424;}
+QWidget#sidebar{background:#07101d;}
+QWidget#sidebar QLabel{background:transparent;}
+QWidget#sidebar QPushButton#navButton{background:transparent;border:none;text-align:left;border-radius:7px;padding:7px 10px;color:#c9d5e6;}
+QWidget#sidebar QPushButton#navButton:hover{background:#16273c;color:#ffffff;}
+QWidget#sidebar QPushButton#newChatButton{background:#152b45;border:1px solid #294563;text-align:left;padding:10px;}
+QWidget#sidebar QListWidget{background:transparent;border:none;}
+QWidget#sidebar QLineEdit{background:#0d1b2d;border:1px solid #24354d;}
+QLabel#chatTitle{font-size:16px;font-weight:600;}
+QLabel#status{color:#9cb3cf;font-size:12px;}
+QTextBrowser#conversation{background:#0b1424;border:none;font-size:15px;padding:18px 22px;}
+QWidget#composer{background:#142238;border:1px solid #2a3d58;border-radius:16px;}
+QWidget#composer QPlainTextEdit{background:transparent;border:none;font-size:14px;padding:9px;}
+QWidget#composer QPushButton{background:transparent;border:none;padding:7px 10px;}
+QWidget#composer QPushButton:hover{background:#213b59;}
+QWidget#composer QPushButton#sendButton{background:#2563eb;color:white;border:none;border-radius:10px;padding:9px 18px;font-weight:600;}
+QWidget#composer QPushButton#sendButton:hover{background:#3478f6;}
+QWidget#composer QPushButton#sendButton:disabled{background:#21324b;color:#8295b2;}
+QWidget#composer QCheckBox{background:transparent;font-size:12px;}
+QLabel#footer{color:#8c9db6;font-size:11px;background:transparent;}
+QSplitter::handle{background:#1b2a40;width:1px;}
+"""
 class Bus(QObject):event=Signal(str,object)
 def btn(text,fn):
  b=QPushButton(text);b.clicked.connect(fn);return b
@@ -39,6 +63,16 @@ class FloatingAssistant(QWidget):
  def mouseReleaseEvent(self,event):self.drag=None
  def mouseDoubleClickEvent(self,event):self.open()
 
+class StartupSplash(QWidget):
+ """Loading animation shown before the main window, until the model is ready."""
+ def __init__(self,owner,path):
+  super().__init__(None,Qt.WindowType.SplashScreen|Qt.WindowType.FramelessWindowHint)
+  self.owner=owner;self.setWindowTitle('Iniciando AURA');self.setWindowIcon(QIcon(str(ASSETS/'aura.ico')));self.resize(760,500);layout=QVBoxLayout(self);video=QVideoWidget();layout.addWidget(video,1);self.label=QLabel('Iniciando AURA · Preparando el modelo local…');self.label.setAlignment(Qt.AlignmentFlag.AlignCenter);layout.addWidget(self.label);row=QHBoxLayout();row.addWidget(btn('Activar / silenciar sonido',self.toggle_sound));row.addWidget(btn('Continuar mientras carga →',owner.finish_startup));layout.addLayout(row)
+  self.audio=QAudioOutput(self);self.audio.setMuted(True);self.player=QMediaPlayer(self);self.player.setAudioOutput(self.audio);self.player.setVideoOutput(video);self.player.setLoops(QMediaPlayer.Loops.Infinite);self.player.setSource(QUrl.fromLocalFile(str(path)));area=QApplication.primaryScreen().availableGeometry();self.move(area.center()-self.rect().center())
+ def toggle_sound(self):self.audio.setMuted(not self.audio.isMuted())
+ def begin(self):self.show();self.player.play()
+ def release(self):self.player.stop();self.player.setSource(QUrl());self.hide();self.deleteLater()
+
 class Window(QMainWindow):
  def __init__(self,data):
   super().__init__();self.data=Path(data).resolve();self.data.mkdir(parents=True,exist_ok=True);self.prefs_path=self.data/'native-settings.json'
@@ -51,20 +85,32 @@ class Window(QMainWindow):
   self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
   self.setWindowTitle('AURA · Inteligencia Artificial — Escritorio');self.setWindowIcon(QIcon(str(ASSETS/'aura-icono-transparente.png')));self.resize(1180,760);self.setMinimumSize(760,540)
-  split=QSplitter();self.setCentralWidget(split);side=QWidget();sl=QVBoxLayout(side);brand=QLabel('AURA IA');brand.setObjectName('brand');sl.addWidget(brand);sl.addWidget(QLabel('INTELIGENCIA ARTIFICIAL · LOCAL'))
-  for title,fn in [('＋ Nueva conversación',self.new_chat),('◈ Modelos',self.models),('⚙ Pensamiento y ajustes',self.settings),('▣ Proyecto y archivos',self.project),('✧ Habilidades',self.skills_panel),('◉ Memoria',self.memory_panel),('♫ Voz y audio',self.voice_settings),('›_ Terminal y compilación',self.terminal),('↶ Cambios y deshacer',self.changes)]:sl.addWidget(btn(title,fn))
+  split=QSplitter();self.setCentralWidget(split);side=QWidget();side.setObjectName('sidebar');side.setMinimumWidth(220);side.setMaximumWidth(330);sl=QVBoxLayout(side);sl.setSpacing(3);sl.setContentsMargins(12,16,12,12);brand=QLabel('AURA IA');brand.setObjectName('brand');sl.addWidget(brand);sl.addWidget(QLabel('INTELIGENCIA ARTIFICIAL · LOCAL'))
+  for title,fn in [('＋ Nueva conversación',self.new_chat),('◈ Modelos',self.models),('⚙ Pensamiento y ajustes',self.settings),('▣ Proyecto y archivos',self.project),('✧ Habilidades',self.skills_panel),('◉ Memoria',self.memory_panel),('♫ Voz y audio',self.voice_settings),('›_ Terminal y compilación',self.terminal),('↶ Cambios y deshacer',self.changes)]:
+   nav=btn(title,fn);nav.setObjectName('newChatButton' if title.startswith('＋') else 'navButton');sl.addWidget(nav)
   self.search=QLineEdit();self.search.setPlaceholderText('Buscar conversación…');self.search.textChanged.connect(self.filter_history);sl.addWidget(self.search);self.history=QListWidget();self.history.itemClicked.connect(self.select_chat);sl.addWidget(self.history)
-  right=QWidget();rl=QVBoxLayout(right);top=QHBoxLayout();self.heading=QLabel('Nueva conversación');self.heading.setFont(QFont('Segoe UI',14,QFont.Weight.Bold));top.addWidget(self.heading,1);self.mode=QComboBox();self.mode.addItems(['Conversación','Programación']);top.addWidget(self.mode);self.temporary=QCheckBox('Temporal');self.temporary.setToolTip('Sin guardar conversación ni usar memoria.');top.addWidget(self.temporary);rl.addLayout(top)
-  self.status=QLabel('Lista · Motor CPU sin AVX · Sin servidor web');self.status.setObjectName('status');self.status.setWordWrap(True);rl.addWidget(self.status)
-  self.chat=QTextBrowser();self.chat.setOpenExternalLinks(False);rl.addWidget(self.chat,1)
-  self.input=QPlainTextEdit();self.input.setPlaceholderText('Escribe a AURA. Para guardar un recuerdo: «recuerda: …»');self.input.setMaximumHeight(110);rl.addWidget(self.input)
-  row=QHBoxLayout();self.mic=btn('● Dictar',self.toggle_dictation);row.addWidget(self.mic);row.addWidget(btn('▶ Leer',self.speak));row.addWidget(btn('■ Detener',self.stop));self.auto_voice=QCheckBox('Leer respuestas');self.auto_voice.setChecked(self.prefs.get('auto_voice',False));self.auto_voice.toggled.connect(lambda x:self.save_pref('auto_voice',x));row.addWidget(self.auto_voice);row.addStretch();self.send_button=btn('Enviar →',self.send);row.addWidget(self.send_button);rl.addLayout(row)
-  split.addWidget(side);split.addWidget(right);split.setSizes([265,915]);self.audio=QAudioOutput();self.player=QMediaPlayer();self.player.setAudioOutput(self.audio);self.audio.setVolume(self.prefs.get('volume',90)/100)
+  right=QWidget();rl=QVBoxLayout(right);top=QHBoxLayout();self.heading=QLabel('Nueva conversación');self.heading.setObjectName('chatTitle');self.heading.setFont(QFont('Segoe UI',14,QFont.Weight.Bold));top.addWidget(self.heading,1);self.mode=QComboBox();self.mode.addItems(['Conversación','Programación']);top.addWidget(self.mode);self.temporary=QCheckBox('Temporal');self.temporary.setToolTip('Sin guardar conversación ni usar memoria.');top.addWidget(self.temporary);rl.addLayout(top)
+  self.status=QLabel('Preparando AURA…');self.status.setObjectName('status');self.status.setWordWrap(True);rl.addWidget(self.status)
+  self.chat=QTextBrowser();self.chat.setObjectName('conversation');self.chat.setOpenExternalLinks(False);rl.addWidget(self.chat,1)
+  composer=QWidget();composer.setObjectName('composer');compose_layout=QVBoxLayout(composer);compose_layout.setContentsMargins(7,5,7,5);compose_layout.setSpacing(2)
+  self.input=QPlainTextEdit();self.input.setPlaceholderText('Escribe a AURA. Para guardar un recuerdo: «recuerda: …»');self.input.setMaximumHeight(90);self.input.setMinimumHeight(58);compose_layout.addWidget(self.input)
+  row=QHBoxLayout();self.mic=btn('● Dictar',self.toggle_dictation);row.addWidget(self.mic);row.addWidget(btn('▶ Leer',self.speak));row.addWidget(btn('■ Detener',self.stop));self.auto_voice=QCheckBox('Leer respuestas');self.auto_voice.setChecked(self.prefs.get('auto_voice',False));self.auto_voice.toggled.connect(lambda x:self.save_pref('auto_voice',x));row.addWidget(self.auto_voice);row.addStretch();self.send_button=btn('Enviar →',self.send);self.send_button.setObjectName('sendButton');row.addWidget(self.send_button);compose_layout.addLayout(row);rl.addWidget(composer);footer=QLabel('AURA · Proyectos y memoria en este equipo');footer.setObjectName('footer');footer.setAlignment(Qt.AlignmentFlag.AlignCenter);rl.addWidget(footer)
+  split.addWidget(side);split.addWidget(right);split.setSizes([250,930]);self.audio=QAudioOutput();self.player=QMediaPlayer();self.player.setAudioOutput(self.audio);self.audio.setVolume(self.prefs.get('volume',90)/100)
   self.floating=FloatingAssistant(self)
-  if self.prefs.get('floating',True) and '--ui-proof' not in sys.argv:self.floating.show()
   self.new_chat();self.refresh_history();self.timer=QTimer(self);self.timer.timeout.connect(self.progress);self.timer.start(300)
-  if '--ui-proof' not in sys.argv:QTimer.singleShot(100,self.prepare_model)
-  if self.prefs.get('intro',True) and '--ui-proof' not in sys.argv:QTimer.singleShot(250,self.intro)
+  self.startup=None;self.startup_finished=False
+ def start(self):
+  path=ASSETS/'aura-inicio.mp4'
+  if self.prefs.get('intro',True) and path.is_file():
+   self.startup=StartupSplash(self,path);self.startup.begin()
+  else:self.finish_startup()
+  QTimer.singleShot(0,self.prepare_model)
+ def finish_startup(self):
+  if self.startup_finished:return
+  self.startup_finished=True;self.showNormal()
+  if self.prefs.get('floating',True):self.floating.show()
+  splash=self.startup;self.startup=None
+  if splash is not None:splash.release()
  def save_pref(self,key,value):self.prefs[key]=value;self.prefs_path.write_text(json.dumps(self.prefs,ensure_ascii=False,indent=2),'utf-8')
  def error(self,e):QMessageBox.warning(self,'AURA',str(e))
  def guarded(self):
@@ -103,7 +149,9 @@ class Window(QMainWindow):
   if self.floating.isVisible():self.floating.update_state(self.busy or self.warming or self.dictating or speaking,'Escuchando…' if self.dictating else 'Hablando…' if speaking else 'Preparando el modelo…' if self.warming else 'Pensando y trabajando…' if self.busy else 'Lista. ¿En qué te ayudo?')
   if getattr(self,'render_pending',False):
    self.render_pending=False;delta=self.answer[getattr(self,'drawn',0):];self.chat.moveCursor(QTextCursor.MoveOperation.End);self.chat.insertPlainText(delta);self.drawn=len(self.answer)
-  if self.warming:self.status.setText('Preparando caché local · '+str(round(time.monotonic()-self.started,1))+' s')
+  if self.warming:
+   elapsed=str(round(time.monotonic()-self.started,1))+' s';self.status.setText('Preparando AURA · '+elapsed)
+   if self.startup is not None:self.startup.label.setText('Iniciando AURA · '+elapsed)
   if self.busy:
    first=self.client.first_text;self.status.setText(('Generando' if first else 'Preparando modelo y contexto')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(first,2))+' s' if first else ''))
  def send(self):
@@ -147,7 +195,7 @@ class Window(QMainWindow):
    except Exception as exc:self.bus.event.emit('failed',str(exc))
   threading.Thread(target=work,daemon=True).start();self.refresh_history()
  def handle_event(self,kind,data):
-  if kind=='warmed':self.warming=False;self.send_button.setEnabled(True);self.status.setText('Lista · Caché preparada' if data is None else 'Preparación cancelada o fallida. Puedes reintentar al enviar.');return
+  if kind=='warmed':self.warming=False;self.send_button.setEnabled(True);self.status.setText('Lista para ayudarte' if data is None else 'Preparación cancelada o fallida. Puedes reintentar al enviar.');self.finish_startup();return
   if kind=='token':self.answer+=data;self.items[-1]=('assistant',self.answer);self.render_pending=True
   elif kind=='agent':
    event,payload=data
@@ -355,14 +403,11 @@ class Window(QMainWindow):
     self.audio.setVolume(volume.value()/100);d.accept()
    except Exception as e:self.error(e)
   l.addWidget(btn('Guardar configuración de voz',save));l.addWidget(btn('Eliminar clave guardada',lambda:(self.voice_key.delete(),key.clear(),mode.setCurrentIndex(0),self.save_pref('voice_mode','local'))));d.exec()
- def intro(self):
-  if not self.prefs.get('intro',True):return
-  path=ASSETS/'aura-inicio.mp4'
-  if not path.exists():return
-  d,l=self.dialog('AURA · Bienvenido');video=QVideoWidget();l.addWidget(video);player=QMediaPlayer(d);audio=QAudioOutput(d);audio.setMuted(True);player.setAudioOutput(audio);player.setVideoOutput(video);player.setSource(QUrl.fromLocalFile(str(path)));l.addWidget(btn('Activar / silenciar audio',lambda:audio.setMuted(not audio.isMuted())));l.addWidget(btn('Omitir inicio →',d.accept));player.mediaStatusChanged.connect(lambda status:d.accept() if status==QMediaPlayer.MediaStatus.EndOfMedia else None);player.play();d.exec();player.stop();player.setSource(QUrl())
  def closeEvent(self,event):
   if (self.busy or self.warming) and QMessageBox.question(self,'Cerrar AURA','Se detendrá la tarea en curso. ¿Cerrar?')!=QMessageBox.StandardButton.Yes:event.ignore();return
-  self.stop();self.floating.close();event.accept()
+  self.stop();self.floating.close();
+  if self.startup is not None:self.startup.release();self.startup=None
+  event.accept()
 
 def self_test(data):
  folder=Path(data).resolve();folder.mkdir(parents=True,exist_ok=True);store=Storage(folder/'prueba.db');settings=store.get_settings().model_copy(update={'max_predict_tokens':64,'num_thread':2,'num_ctx':4096});client=NativeClient(ROOT,folder/'motor');started=time.monotonic();client.generate(settings.model_copy(update={'max_predict_tokens':1}),[{'role':'system','content':conversation_prompt(settings)},{'role':'user','content':'Hola'}],lambda text:None);preparation=time.monotonic()-started
@@ -382,7 +427,9 @@ def main():
   window.save_pref('intro',False)
   def capture():window.grab().save(args.ui_proof);app.quit()
   QTimer.singleShot(1200,capture)
- window.show();return app.exec()
+ if args.ui_proof:window.show()
+ else:window.start()
+ return app.exec()
 if __name__=='__main__':
  try:sys.exit(main())
  except Exception as exc:

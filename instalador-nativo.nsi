@@ -1,7 +1,7 @@
 ﻿Unicode true
 !include "MUI2.nsh"
 Name "AURA Inteligencia Artificial"
-OutFile "entrega\AURA-3.0-Nativa-Instalador-Windows-x64.exe"
+OutFile "entrega\AURA-3.0.1-Nativa-Instalador-Windows-x64.exe"
 InstallDir "$LOCALAPPDATA\Programs\AURA"
 RequestExecutionLevel user
 SetCompressor lzma
@@ -33,10 +33,10 @@ Section "AURA Inteligencia Artificial"
  CreateShortcut "$SMPROGRAMS\AURA\AURA.lnk" "$INSTDIR\AURA-Nativa.exe"
  CreateShortcut "$SMPROGRAMS\AURA\Desinstalar.lnk" "$INSTDIR\Desinstalar.exe"
  CreateShortcut "$DESKTOP\AURA.lnk" "$INSTDIR\AURA-Nativa.exe"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AURA" "DisplayName" "AURA Inteligencia Artificial 3.0"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AURA" "DisplayName" "AURA Inteligencia Artificial 3.0.1"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AURA" "UninstallString" '"$INSTDIR\Desinstalar.exe"'
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AURA" "InstallLocation" "$INSTDIR"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AURA" "DisplayVersion" "3.0.0"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AURA" "DisplayVersion" "3.0.1"
  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AURA" "NoModify" 1
  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AURA" "NoRepair" 1
 SectionEnd

@@ -20,3 +20,5 @@ entrega/
 *.bin
 .env
 .env.*
+
+!agente_ia/static/assets/aura-inicio.mp4

@@ -1,3 +1,5 @@
-# AURA
+# AURA · escritorio azul oscuro
 
-La referencia visual es el HTML proporcionado por el usuario: barra lateral oscura, núcleo cian, historial, cuatro tarjetas y compositor inferior. Se usan sus dos imágenes y su video original. El diseño es local y no consulta CDNs ni Gemini. Se conserva el contraste con texto claro sobre azul oscuro. Los efectos continuos y el desenfoque se reducen por defecto para la PC i5; el video solo se reproduce al inicio y puede omitirse. Los paneles nativos contienen controles funcionales de modelos, pensamiento, proyectos, habilidades y terminal.
+Ventana Qt nativa con distribución de chat: navegación lateral compacta, historial a la izquierda, conversación amplia y compositor inferior integrado. Paleta azul noche #07101d / #0b1424, texto claro #e4eaf4 y acción principal azul #2563eb. Conserva los logos cian transparentes de AURA. Las animaciones son ligeras para CPU antigua.
+
+El video es una pantalla de arranque: aparece antes del chat y se reproduce mientras se prepara el modelo. Se cierra al terminar la preparación; omitirlo muestra el chat sin cancelar la carga. Si falta el video o está desactivado se muestra directamente el estado de preparación.

@@ -4,7 +4,7 @@
 
 Asistente de escritorio para **Windows 10 x64**, con programación local, memoria persistente y asistente flotante. **Las contribuciones son bienvenidas.**
 
-La interfaz principal utiliza PySide6/Qt: no abre navegador ni inicia un servidor web. El motor de texto se comunica por procesos locales y está preparado con bibliotecas CPU SSE4.2/x64 para equipos antiguos. El objetivo de desarrollo incluye un i5 de primera generación y 16 GB RAM; todavía falta probar ese equipo físico.
+La interfaz principal tiene una distribución de chat en azul oscuro, con navegación lateral compacta. Utiliza PySide6/Qt: no abre navegador ni inicia un servidor web. El motor de texto se comunica por procesos locales y está preparado con bibliotecas CPU SSE4.2/x64 para equipos antiguos. El objetivo de desarrollo incluye un i5 de primera generación y 16 GB RAM; todavía falta probar ese equipo físico.
 
 ## Funciones
 
@@ -21,7 +21,7 @@ La interfaz principal utiliza PySide6/Qt: no abre navegador ni inicia un servido
 
 Proyecto en desarrollo. Las consultas cortas medidas con caché preparada dieron aproximadamente **1,2 y 2,5 segundos hasta el primer texto** en el equipo de prueba. La carga inicial y las conversaciones largas pueden tardar mucho más. No se garantiza ese rendimiento en otro procesador.
 
-La clonación local de una voz de referencia **no está terminada ni validada**. Un archivo MP3 no es un modelo de voz. No se incluyen grabaciones personales, credenciales ni datos de conversaciones en este repositorio. El video de inicio y el audio de referencia son opcionales y no se distribuyen aquí.
+La clonación local de una voz de referencia **no está terminada ni validada**. Un archivo MP3 no es un modelo de voz. No se incluyen grabaciones personales, credenciales ni datos de conversaciones en este repositorio. El video de presentación de AURA se incluye con autorización expresa y se muestra mientras se prepara la IA, antes del chat. El audio de referencia personal no se distribuye aquí.
 
 No hay cuotas de uso de tokens; cada consulta está limitada por el contexto y la longitud elegidos. La memoria ayuda a recuperar información, pero no vuelve ilimitado el contexto del modelo.
 

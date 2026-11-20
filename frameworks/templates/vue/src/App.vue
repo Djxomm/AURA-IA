@@ -1,0 +1,1 @@
+<script setup>import {ref} from "vue";const n=ref(0);</script><template><main><h1>AURA · Vue.js</h1><p>Tu proyecto está listo.</p><button @click="n++">Clics: {{n}}</button></main></template>

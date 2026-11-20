@@ -22,3 +22,6 @@ entrega/
 .env.*
 
 !agente_ia/static/assets/aura-inicio.mp4
+
+node_modules/
+frameworks/npm-cache.zip

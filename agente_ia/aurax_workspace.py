@@ -4,7 +4,7 @@ import os,re,shutil,sys,uuid
 from pathlib import Path
 from PySide6.QtCore import Qt,Signal,QProcess,QProcessEnvironment,QTimer
 from PySide6.QtGui import QFont,QSyntaxHighlighter,QTextCharFormat,QColor
-from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLabel,QSplitter,QTreeView,QFileSystemModel,QTabWidget,QPlainTextEdit,QInputDialog,QMessageBox,QDialog,QDialogButtonBox
+from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLabel,QSplitter,QTreeView,QFileSystemModel,QTabWidget,QPlainTextEdit,QInputDialog,QMessageBox,QDialog,QDialogButtonBox,QMenu
 from .workspace import SafeWorkspace,compute_file_hash,build_diff,WorkspaceError
 
 class CodeColors(QSyntaxHighlighter):
@@ -20,10 +20,10 @@ class CodeEditor(QPlainTextEdit):
 class AuraxWorkspace(QWidget):
  attach_requested=Signal(str)
  def __init__(self,owner,runtime):
-  super().__init__();self.owner=owner;self.runtime=Path(runtime);self.workspace=SafeWorkspace(owner.store.get_settings().workspace_path);self.process=QProcess(self);self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels);self.process.readyReadStandardOutput.connect(self.read_output);self.process.finished.connect(self.finished);self.process.errorOccurred.connect(lambda error:self.console.appendPlainText('No se pudo ejecutar el proceso: '+self.process.errorString()));self.timeout=QTimer(self);self.timeout.setSingleShot(True);self.timeout.timeout.connect(self.stop_process)
+  super().__init__();self.owner=owner;self.runtime=Path(runtime);self.workspace=SafeWorkspace(owner.store.get_settings().workspace_path);self.process=QProcess(self);self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels);self.process.readyReadStandardOutput.connect(self.read_output);self.process.finished.connect(self.finished);self.process.errorOccurred.connect(lambda error:self.console.appendPlainText('No se pudo ejecutar el proceso: '+self.process.errorString()));self.timeout=QTimer(self);self.timeout.setSingleShot(True);self.timeout.timeout.connect(self.stop_process);self.web_url=None;self.web_preview=None;self.web_preview_opened=False
   layout=QVBoxLayout(self);layout.setContentsMargins(8,8,8,8);title=QLabel('AURAX · Codificador');title.setFont(QFont('Segoe UI',15,QFont.Weight.Bold));titlebar=QHBoxLayout();titlebar.addWidget(title,1);import_code=QPushButton('Revisar código IA');import_code.clicked.connect(self.import_response);titlebar.addWidget(import_code);layout.addLayout(titlebar);self.path_label=QLabel(str(self.workspace.root));self.path_label.setWordWrap(True);layout.addWidget(self.path_label)
   toolbar=QHBoxLayout()
-  for text,fn in [('Proyecto',owner.project),('Nuevo',self.new_file),('Guardar',self.save_current),('Adjuntar a AURAX',self.attach)]:
+  for text,fn in [('Proyecto',owner.project),('Nuevo',self.new_file),('Guardar',self.save_current),('Adjuntar a AURAX',self.attach),('Proyecto web',self.web_menu)]:
    button=QPushButton(text);button.clicked.connect(fn);toolbar.addWidget(button)
   layout.addLayout(toolbar);split=QSplitter();self.model=QFileSystemModel(self);self.model.setRootPath(str(self.workspace.root));self.tree=QTreeView();self.tree.setModel(self.model);self.tree.setHeaderHidden(True);self.tree.setRootIndex(self.model.index(str(self.workspace.root)));self.tree.doubleClicked.connect(lambda index:self.open_path(self.model.filePath(index)))
   for column in (1,2,3):self.tree.hideColumn(column)
@@ -102,6 +102,15 @@ class AuraxWorkspace(QWidget):
   self.attach_requested.emit(editor.path)
  def run(self,kind):
   editor=self.tabs.currentWidget()
+  if kind in {'check','run','build'}:
+   try:
+    from .framework_tools import find_web_project
+    target=self.workspace.resolve_safe_path(editor.path) if editor else None
+    web_file=editor is None or Path(editor.path).suffix.lower() in {'.js','.jsx','.mjs','.cjs','.ts','.tsx','.vue','.html','.htm','.css','.json'}
+    project=find_web_project(self.workspace.root,target) if web_file else None
+    if project and web_file and (project.label!='Proyecto npm' or ('build' in project.scripts and 'dev' in project.scripts)):
+     self.framework_action(kind,project);return
+   except Exception as error:self.message(error);return
   if editor is None:self.message('Abre un archivo del proyecto para verificarlo, ejecutarlo o compilarlo.');return
   if self.owner.busy or self.owner.warming:self.message('Espera a que AURA termine su tarea.');return
   if self.process.state()!=QProcess.ProcessState.NotRunning:self.message('Ya hay un proceso activo.');return
@@ -121,6 +130,51 @@ class AuraxWorkspace(QWidget):
   command=str(python)+' '+ ' '.join(args)
   if QMessageBox.question(self,'AURAX · Autorizar proceso','Se ejecutará en el proyecto seleccionado:\n\n'+command)!=QMessageBox.StandardButton.Yes:return
   env=QProcessEnvironment.systemEnvironment();env.insert('PYTHONUTF8','1');env.insert('PYTHONIOENCODING','utf-8');env.insert('PATH',str(python.parent)+os.pathsep+env.value('PATH'));self.process.setProcessEnvironment(env);self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(python),args);self.timeout.start(300000 if kind=='build' else 120000)
+ def web_menu(self):
+  menu=QMenu(self)
+  for title,action in [('Abrir vista previa','preview'),('Nuevo React','new-react'),('Nuevo Vue.js','new-vue'),('Preparar dependencias sin conexión','offline'),('Instalar dependencias con Internet','online')]:
+   entry=menu.addAction(title);entry.triggered.connect(lambda checked=False,action=action:self.web_choice(action))
+  from PySide6.QtGui import QCursor
+  menu.exec(QCursor.pos())
+ def web_choice(self,action):
+  if action=='preview':self.open_web_preview();return
+  if self.owner.busy:self.message('Espera a que AURAX termine su tarea antes de cambiar de proyecto.');return
+  from .framework_tools import create_template,find_web_project
+  if self.process.state()!=QProcess.ProcessState.NotRunning:self.message('Pulsa Detener antes de preparar otro proyecto.');return
+  try:
+   if action.startswith('new-'):
+    if any(self.tabs.widget(i).document().isModified() for i in range(self.tabs.count())):self.message('Guarda los archivos modificados antes de crear otro proyecto.');return
+    name,ok=QInputDialog.getText(self,'AURAX · Proyecto web','Nombre de una carpeta nueva:',text='mi-'+action[4:])
+    if not ok or not name.strip():return
+    target=self.workspace.resolve_safe_path(name.strip(),allow_write=True);create_template(self.runtime,target,action[4:])
+    if not self.set_project(target):return
+    self.owner.store.save_settings(self.owner.store.get_settings().model_copy(update={'workspace_path':str(target)}));self.owner.attached_files.clear();self.owner.new_chat();self.open_path(str(target/'package.json'));self.console.appendPlainText('Proyecto creado. Se prepararán las dependencias con tu aprobación; después usa Ejecutar o Compilar.');self.framework_action('offline',find_web_project(target));return
+   self.framework_action(action,find_web_project(self.workspace.root))
+  except Exception as error:self.message(error)
+ def framework_action(self,action,project):
+  from .framework_tools import npm_command
+  import socket
+  if project is None:self.message('Selecciona una carpeta que contenga package.json.');return
+  if self.owner.busy or self.owner.warming:self.message('Espera a que AURA termine su tarea.');return
+  if self.process.state()!=QProcess.ProcessState.NotRunning:self.message('Pulsa Detener antes de iniciar otra tarea del proyecto.');return
+  if any(self.tabs.widget(i).document().isModified() for i in range(self.tabs.count())):self.message('Guarda los archivos modificados antes de ejecutar el proyecto.');return
+  try:
+   wrapper=self.runtime/'herramientas/aura-web/aura-job.exe'
+   if not wrapper.is_file():raise ValueError('Falta el controlador de procesos incluido para proyectos web.')
+   url=None
+   if action in {'offline','online'}:
+    program=self.runtime/'herramientas/python/python.exe';args=[str(self.runtime/'herramientas/aura-web/prepare.py'),str(self.runtime),str(project.root),action];detail='Prepara dependencias '+('sin conexión' if action=='offline' else 'usando Internet')+'. Los scripts de instalación quedan desactivados.'
+   else:
+    if not (project.root/'node_modules').is_dir():raise ValueError('Primero abre Proyecto web y prepara sus dependencias.')
+    with socket.socket() as listener:listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
+    program,args,script=npm_command(self.runtime,project,action,port);detail='Script '+script+': '+project.scripts[script]
+    if action=='run':url='http://127.0.0.1:'+str(port)+'/'
+   command=str(program)+' '+' '.join(args)
+   if QMessageBox.question(self,'AURAX · '+project.label,detail+'\n\nCarpeta: '+str(project.root)+'\n\n'+command+'\n\nLos scripts del proyecto ejecutan código. Detener cierra el proceso y sus procesos secundarios.')!=QMessageBox.StandardButton.Yes:return
+   env=QProcessEnvironment.systemEnvironment();env.insert('PATH',str(self.runtime/'herramientas/node')+os.pathsep+env.value('PATH'));env.insert('NODE_OPTIONS','--max-old-space-size=768');env.insert('NO_COLOR','1');env.insert('FORCE_COLOR','0');self.process.setProcessEnvironment(env);self.process.setWorkingDirectory(str(project.root));self.web_url=url;self.web_preview_opened=False;self.console.appendPlainText('> '+command);self.process.start(str(wrapper),[str(program),*args])
+   if action=='run':self.timeout.stop()
+   else:self.timeout.start(300000)
+  except Exception as error:self.message(error)
  def run_language(self,editor,kind):
   from .language_tools import language_plan,check_html
   if editor.base is None or editor.document().isModified():
@@ -165,10 +219,20 @@ class AuraxWorkspace(QWidget):
   target=str(self.workspace.resolve_safe_path(editor.path));command=str(compiler)+' '+target
   if QMessageBox.question(self,'AURAX · Crear instalador','Compilar este script puede ejecutar instrucciones de su autor. Revisa primero el contenido.\n\n'+command)!=QMessageBox.StandardButton.Yes:return
   self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(compiler),[target]);self.timeout.start(300000)
- def read_output(self):self.console.appendPlainText(bytes(self.process.readAllStandardOutput()).decode('utf-8','replace').rstrip())
- def finished(self,code,status):self.timeout.stop();self.read_output();self.console.appendPlainText('Proceso terminado · código de salida: '+str(code))
+ def read_output(self):
+  output=bytes(self.process.readAllStandardOutput()).decode('utf-8','replace');output=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',output);self.console.appendPlainText(output.rstrip())
+  if self.web_url and not self.web_preview_opened and self.web_url in self.console.toPlainText():self.open_web_preview()
+ def open_web_preview(self):
+  if not self.web_url:self.message('Pulsa Ejecutar en el proyecto web para iniciar su vista previa.');return
+  if self.web_preview is not None:self.web_preview.show();self.web_preview.raise_();return
+  from .native_browser import BrowserWindow
+  from PySide6.QtCore import QUrl
+  preview=BrowserWindow(self.owner);self.web_preview=preview;self.web_preview_opened=True;preview.destroyed.connect(lambda:setattr(self,'web_preview',None));preview.setWindowTitle('AURAX · Vista previa del proyecto web');preview.view.setUrl(QUrl(self.web_url));preview.show()
+ def finished(self,code,status):self.timeout.stop();self.read_output();self.web_url=None;self.console.appendPlainText('Proceso terminado · código de salida: '+str(code))
  def stop_process(self):
-  if self.process.state()!=QProcess.ProcessState.NotRunning:self.process.kill();self.console.appendPlainText('Proceso detenido por el usuario o por límite de tiempo.')
+  self.web_url=None
+  if self.web_preview is not None:self.web_preview.close();self.web_preview=None
+  if self.process.state()!=QProcess.ProcessState.NotRunning:self.process.kill();self.process.waitForFinished(2000);self.console.appendPlainText('Proceso detenido por el usuario o por límite de tiempo.')
  def refresh_after_agent(self):
   for i in range(self.tabs.count()):
    editor=self.tabs.widget(i)

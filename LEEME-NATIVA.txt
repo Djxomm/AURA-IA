@@ -1,4 +1,4 @@
-﻿AURA Inteligencia Artificial 3.4.0 — Escritorio nativo Windows 10 x64
+﻿AURA Inteligencia Artificial 3.5.0 — Escritorio nativo Windows 10 x64
 
 Ventana propia Qt. No inicia un navegador externo ni un servidor web para la interfaz. El explorador integrado de Internet es opcional. Motor CPU Qwen2.5-Coder 1.5B Q4_K_M con bibliotecas SSE4.2/x64; no utiliza AVX ni CUDA para generar texto. Ajuste inicial: 2 hilos. El i5 de primera generación de destino no se ha probado físicamente.
 
@@ -47,3 +47,13 @@ Lenguajes 3.4: AURAX reconoce JavaScript (.js/.mjs/.cjs), Java (.java), HTML5 (.
 Verificar revisa sintaxis en JavaScript/PHP y compila Java a .class. Compilar genera EXE para Python/C++ y .class para Java en build/aurax-java; JavaScript, HTML5 y PHP no se convierten automáticamente a EXE. Ejecutar corre el código o abre una vista previa local HTML5 dentro de AURA, sin servidor web. En HTML se hace una revisión de lectura básica, que no sustituye un validador completo. PHP de consola no crea un sitio web ni simula automáticamente una petición HTTP.
 
 Los proyectos con bibliotecas externas necesitan sus dependencias. Node incluye npm; Java incluye herramientas del JDK. Terminal incorpora rutas de las herramientas incluidas sin modificar permanentemente Windows. Cada ejecución se revisa antes de autorizarse. Las habilidades Bases de datos SQL y Programación multilenguaje están disponibles en Habilidades; activarlas no concede permisos nuevos.
+
+Proyectos web 3.5: en AURAX abre Proyecto web y elige Nuevo React o Nuevo Vue.js. Indica una carpeta nueva; el programa prepara las dependencias incluidas después de mostrarte la confirmación. Después usa los mismos botones Verificar, Ejecutar y Compilar. La plantilla y su caché npm están incluidas: no hace falta Internet para preparar estas dos plantillas en Windows x64.
+
+Ejecutar inicia Vite temporalmente en 127.0.0.1 y abre una ventana propia. Detener o cerrar AURA termina el comando y todos sus procesos secundarios mediante un Job Object de Windows. La interfaz de AURA sigue siendo nativa; el servidor temporal pertenece únicamente a la vista previa del proyecto. Proyecto web permite volver a abrir esa vista previa si cerraste la ventana.
+
+Compilar usa el script build y genera los archivos web, normalmente en dist, no un EXE Windows. Verificar utiliza typecheck, type-check, lint o build según lo que exista. Otros proyectos npm pueden utilizar sus scripts de verificación/compilación; la vista previa automática es para Vite. Otros servidores se configuran desde Terminal. No se garantiza todo framework o versión sin comprobar sus requisitos.
+
+Preparar dependencias sin conexión usa la caché incluida. Instalar con Internet sirve para dependencias adicionales. Ambas opciones desactivan scripts de instalación, auditoría y avisos de actualización; si un proyecto necesita postinstall o pasos especiales, revisa esos comandos por separado en Terminal. Los scripts dev/build del proyecto sí ejecutan código y se muestran antes de autorizar. El control de procesos evita dejar servidores abandonados; no es un aislamiento de seguridad para código desconocido.
+
+Versiones de las plantillas: React 19.3.1, Vue 3.5.46 y Vite 7.3.8. Los procesos web usan inicialmente 768 MB de heap Node; proyectos grandes pueden necesitar otros ajustes. Los componentes solo se ponen en marcha al utilizarlos.

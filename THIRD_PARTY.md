@@ -17,3 +17,5 @@ Los textos de licencias disponibles se conservan en `licenses/`. No se incluyen 
 - Node.js/OpenJS Foundation: MIT y avisos de sus dependencias en `licenses/languages/Node-LICENSE.txt`.
 - PHP Group: PHP License 3.01; texto incluido en `licenses/languages/PHP-LICENSE.txt`.
 - Eclipse Temurin/OpenJDK: GPLv2 con Classpath Exception y licencias por componente, conservadas en `licenses/languages/JDK-legal/`; el JDK incluye `lib/src.zip`. La licencia MIT de AURA no sustituye estas licencias.
+
+- React, Vue, Vite, sus plugins y dependencias de las plantillas: versiones en `frameworks/manifest.json`, integridades en los lockfiles y avisos en `licenses/frameworks/`. La caché offline incluida conserva los paquetes de origen.

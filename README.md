@@ -135,3 +135,19 @@ El paquete privado incluye Node.js 22.23.5, Eclipse Temurin JDK 25.0.4.1+1 y PHP
 Se probaron programas reales de los tres lenguajes, compilación Java y una página HTML5 que modificó el DOM mediante JavaScript. La habilidad **Programación multilenguaje** se puede activar desde Habilidades.
 
 Para construir desde fuente, coloca las distribuciones oficiales en `runtime/herramientas/node`, `runtime/herramientas/jdk` y `runtime/herramientas/php`. Versiones, procedencia y licencias están en `licenses/languages/`. El instalador incluye estas herramientas; el repositorio contiene su código de integración y avisos, sin duplicar los binarios.
+
+## React y Vue.js sin perder la sencillez
+
+1. En AURAX abre **Proyecto web → Nuevo React** o **Nuevo Vue.js**.
+2. Escribe el nombre de una carpeta nueva y revisa la preparación de dependencias.
+3. Usa **Ejecutar**, **Verificar**, **Compilar** y **Detener**.
+
+El instalador incluye las plantillas y una caché npm verificada. React y Vue se pueden preparar sin Internet en Windows x64. Si un proyecto necesita paquetes adicionales, utiliza **Instalar dependencias con Internet**. Las dos opciones desactivan scripts de instalación; proyectos que necesiten pasos especiales pueden ejecutarlos después de revisarlos en Terminal.
+
+Ejecutar abre Vite en `127.0.0.1` y muestra el proyecto en una ventana de AURA. Detener y salir cierran el comando y sus descendientes mediante un Job Object de Windows. El lanzador crea el proceso suspendido, lo asigna al Job y solo entonces lo ejecuta. Este mecanismo controla su duración; no constituye un aislamiento de seguridad para código desconocido. La interfaz principal de AURA sigue siendo nativa, sin servidor web propio.
+
+Verificar utiliza `typecheck`, `type-check`, `lint` o `build`, según los scripts disponibles. Compilar ejecuta `build` y genera archivos web, normalmente `dist`, sin convertirlos automáticamente a EXE. Otros proyectos npm pueden usar sus scripts de verificación y compilación; la vista previa automática está preparada para Vite. No se garantiza todo framework o versión.
+
+Se probaron ambas plantillas: preparación con `npm ci --offline`, compilación, renderizado, clic en un botón y cierre del servidor con sus procesos secundarios. Las versiones incluidas son React 19.3.1, Vue 3.5.46 y Vite 7.3.8.
+
+Para reproducir el paquete desde fuente, prepara Node y w64devkit y ejecuta `python scripts/prepare_frameworks.py`. El script usa los archivos de bloqueo, genera la caché y compila el lanzador de procesos. No se guardan `node_modules` ni la caché binaria en GitHub. El instalador copia `runtime/frameworks`, `runtime/herramientas/aura-web` y las licencias junto a los demás componentes.

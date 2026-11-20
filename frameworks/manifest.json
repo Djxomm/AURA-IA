@@ -1,0 +1,14 @@
+{
+  "templates": [
+    "react",
+    "vue"
+  ],
+  "cache_sha256": "e9ef1722194f458d0b1714db601b8c577422b5595ab6f6520a52ef8c244f03a5",
+  "versions": {
+    "react": "19.3.1",
+    "vue": "3.5.46",
+    "vite": "7.3.8",
+    "react_plugin": "5.2.0",
+    "vue_plugin": "6.0.11"
+  }
+}

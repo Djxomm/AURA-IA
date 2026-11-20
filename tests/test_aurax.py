@@ -39,6 +39,9 @@ def test_ai_code_opens_as_unsaved_proposal(tmp_path,monkeypatch):
 def test_cpp_and_inno_commands_require_approval(tmp_path,monkeypatch):
  from PySide6.QtWidgets import QMessageBox
  app,w,p=make(tmp_path)
+ p.runtime=tmp_path/'runtime'
+ for tool in ['herramientas/w64devkit/bin/g++.exe','herramientas/inno/ISCC.exe']:
+  path=p.runtime/tool;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'not executed')
  for relative,kind in [('programa.cpp','build'),('instalador.iss','installer')]:
   target=p.workspace.root/relative;target.write_text('test');p.open_path(str(target))
   calls=[]

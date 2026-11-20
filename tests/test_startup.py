@@ -29,3 +29,16 @@ def test_skipping_video_does_not_cancel_preparation(tmp_path,monkeypatch):
  app,w,events=setup_window(tmp_path,monkeypatch);cancel=[];monkeypatch.setattr(w.client,'stop',lambda:cancel.append(True));w.start();splash=w.startup;w.finish_startup();app.processEvents()
  assert w.isVisible() and splash.released;assert 'model' in events;assert not cancel
  w.handle_event('warmed',None);w.close();w.store.close();w.memory.close()
+
+
+def test_startup_contains_only_video_without_controls(tmp_path):
+ from native_launcher import StartupSplash
+ from PySide6.QtWidgets import QPushButton,QLabel
+ from PySide6.QtMultimediaWidgets import QVideoWidget
+ app=QApplication.instance() or QApplication([])
+ splash=StartupSplash(None,tmp_path/'intro.mp4')
+ assert not splash.findChildren(QPushButton)
+ assert not splash.findChildren(QLabel)
+ assert len(splash.findChildren(QVideoWidget))==1
+ assert splash.layout().contentsMargins().left()==0
+ splash.release();app.processEvents()

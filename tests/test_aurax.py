@@ -34,3 +34,15 @@ def test_json_tool_fence_is_recognized_but_examples_and_unknown_tools_are_not():
 def test_ai_code_opens_as_unsaved_proposal(tmp_path,monkeypatch):
  from PySide6.QtWidgets import QInputDialog
  app,w,p=make(tmp_path);w.last_answer='```python\ndef sumar(a,b):\n    return a+b\n```';monkeypatch.setattr(QInputDialog,'getText',lambda *args,**kwargs:('suma.py',True));p.import_response();assert p.tabs.currentWidget().document().isModified();assert not (p.workspace.root/'suma.py').exists();cleanup(w)
+
+
+def test_cpp_and_inno_commands_require_approval(tmp_path,monkeypatch):
+ from PySide6.QtWidgets import QMessageBox
+ app,w,p=make(tmp_path)
+ for relative,kind in [('programa.cpp','build'),('instalador.iss','installer')]:
+  target=p.workspace.root/relative;target.write_text('test');p.open_path(str(target))
+  calls=[]
+  monkeypatch.setattr(QMessageBox,'question',lambda *args:calls.append(args) or QMessageBox.StandardButton.No)
+  p.run(kind)
+  assert calls and p.process.state()==p.process.ProcessState.NotRunning
+ cleanup(w)

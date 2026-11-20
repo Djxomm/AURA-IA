@@ -4,7 +4,7 @@
 
 Asistente de escritorio para **Windows 10 x64**, con programación local, memoria persistente y asistente flotante. **Las contribuciones son bienvenidas.**
 
-La interfaz principal tiene una distribución de chat en azul oscuro, con navegación lateral compacta. Utiliza PySide6/Qt: no abre navegador ni inicia un servidor web. El motor de texto se comunica por procesos locales y está preparado con bibliotecas CPU SSE4.2/x64 para equipos antiguos. El objetivo de desarrollo incluye un i5 de primera generación y 16 GB RAM; todavía falta probar ese equipo físico.
+La interfaz principal tiene una distribución de chat en azul oscuro, con navegación lateral compacta. Utiliza PySide6/Qt: no necesita un navegador externo ni inicia un servidor web para la interfaz. El explorador de Internet opcional se abre en una ventana integrada. El motor de texto se comunica por procesos locales y está preparado con bibliotecas CPU SSE4.2/x64 para equipos antiguos. El objetivo de desarrollo incluye un i5 de primera generación y 16 GB RAM; todavía falta probar ese equipo físico.
 
 ## AURAX · Codificador integrado
 
@@ -76,3 +76,25 @@ La especificación genera la ventana nativa. Para un paquete completo hay que co
 Lee [CONTRIBUTING.md](CONTRIBUTING.md), abre un issue o envía un pull request. Son especialmente útiles las pruebas en procesadores antiguos, mejoras de accesibilidad, recuperación de contexto, voz local eficiente y documentación.
 
 Código original de AURA bajo [MIT](LICENSE). Modelos, Qt y otras dependencias conservan sus propias licencias: consulta [THIRD_PARTY.md](THIRD_PARTY.md). Proyecto independiente de OpenAI Codex.
+
+## Explorador de Internet
+
+El menú **Explorador de Internet** abre Qt WebEngine únicamente cuando se solicita. Admite direcciones HTTP/HTTPS y búsquedas. Usa un perfil privado en memoria; al cerrar se eliminan cookies y excepciones de certificado.
+
+Ante un certificado inválido, se muestra el dominio, el motivo y la decisión **Entrar bajo mi responsabilidad**. Cancelar es la opción predeterminada. Los errores que Chromium no permite anular se rechazan. Una excepción puede mantenerse durante esa sesión del explorador; no modifica los certificados de Windows ni desactiva TLS globalmente. HTTP se identifica como conexión sin cifrar.
+
+Las descargas y los permisos de cámara, micrófono y ubicación están bloqueados en esta versión. No se comparte automáticamente el contenido de los sitios con el modelo. Se comprobó en un servidor HTTPS local aislado el rechazo y la aceptación explícita de un certificado autofirmado.
+
+El instalador 3.2 se genera con Inno Setup y el archivo `instalador-nativo.iss`.
+
+### Inicio automático sin controles
+
+La pantalla de inicio contiene únicamente el video, sin botones ni textos superpuestos. Se reproduce automáticamente en silencio, se repite durante la preparación y da paso al chat cuando termina la carga del modelo. Si la preparación falla, se abre la interfaz con el aviso correspondiente.
+
+### C/C++ e instaladores
+
+AURAX admite verificar archivos C/C++, compilar un archivo a EXE y ejecutar el resultado, además de Python. El paquete privado incorpora w64devkit 2.11.0 (GCC); no es Visual Studio ni un gestor automático de dependencias CMake. Para proyectos de varios archivos se puede utilizar la terminal. Cada proceso requiere aprobación.
+
+Abre un archivo `.iss` y pulsa **Crear instalador** para invocar Inno Setup 7.1.1. Revisa los scripts de terceros antes de autorizarlos: sus directivas pueden ejecutar procesos. El paquete incluye el compilador y sus avisos de licencia.
+
+Para preparar estas herramientas al construir desde código fuente, instala o extrae w64devkit bajo `runtime/herramientas/w64devkit` e Inno Setup bajo `runtime/herramientas/inno`; los ejecutables deben ser `bin/g++.exe` e `ISCC.exe`. La instalación del modelo sigue usando `scripts/prepare_runtime.py`.

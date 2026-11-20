@@ -29,7 +29,7 @@ class AuraxWorkspace(QWidget):
   for column in (1,2,3):self.tree.hideColumn(column)
   self.tabs=QTabWidget();self.tabs.setTabsClosable(True);self.tabs.tabCloseRequested.connect(self.close_tab);split.addWidget(self.tree);split.addWidget(self.tabs);split.setSizes([150,420]);layout.addWidget(split,1)
   row=QHBoxLayout()
-  for text,kind in [('Verificar','check'),('Ejecutar','run'),('Compilar EXE','build')]:
+  for text,kind in [('Verificar','check'),('Ejecutar','run'),('Compilar EXE','build'),('Crear instalador','installer')]:
    button=QPushButton(text);button.clicked.connect(lambda checked=False,kind=kind:self.run(kind));row.addWidget(button)
   stop=QPushButton('Detener');stop.clicked.connect(self.stop_process);row.addWidget(stop);layout.addLayout(row)
   self.console=QPlainTextEdit();self.console.setReadOnly(True);self.console.setMaximumBlockCount(1500);self.console.setMaximumHeight(175);self.console.setPlaceholderText('Consola de AURAX: aquí aparecen comandos, errores y resultados reales.');self.console.setFont(QFont('Consolas',10));self.console.setStyleSheet('font-family:Consolas;font-size:12px;');layout.addWidget(self.console)
@@ -102,10 +102,14 @@ class AuraxWorkspace(QWidget):
   self.attach_requested.emit(editor.path)
  def run(self,kind):
   editor=self.tabs.currentWidget()
-  if editor is None:self.message('Abre un archivo Python.');return
+  if editor is None:self.message('Abre un archivo Python o un proyecto de instalador .iss.');return
   if self.owner.busy or self.owner.warming:self.message('Espera a que AURA termine su tarea.');return
   if self.process.state()!=QProcess.ProcessState.NotRunning:self.message('Ya hay un proceso activo.');return
-  if not editor.path.lower().endswith('.py'):self.message('Los botones automáticos son para Python. Usa Terminal para otros lenguajes.');return
+  if Path(editor.path).suffix.lower() in {'.cpp','.cc','.cxx','.c'} and kind!='installer':
+   self.run_cpp(editor,kind);return
+  if kind=='installer':
+   self.run_installer(editor);return
+  if not editor.path.lower().endswith('.py'):self.message('Usa Crear instalador para archivos .iss; estos botones son para Python.');return
   if editor.base is None or editor.document().isModified():
    if not self.save_current():return
   python=self.runtime/'herramientas/python/python.exe'
@@ -115,6 +119,32 @@ class AuraxWorkspace(QWidget):
   command=str(python)+' '+ ' '.join(args)
   if QMessageBox.question(self,'AURAX · Autorizar proceso','Se ejecutará en el proyecto seleccionado:\n\n'+command)!=QMessageBox.StandardButton.Yes:return
   env=QProcessEnvironment.systemEnvironment();env.insert('PYTHONUTF8','1');env.insert('PYTHONIOENCODING','utf-8');env.insert('PATH',str(python.parent)+os.pathsep+env.value('PATH'));self.process.setProcessEnvironment(env);self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(python),args);self.timeout.start(300000 if kind=='build' else 120000)
+ def run_cpp(self,editor,kind):
+  if editor.base is None or editor.document().isModified():
+   if not self.save_current():return
+  compiler=self.runtime/'herramientas/w64devkit/bin'/('gcc.exe' if editor.path.endswith('.c') else 'g++.exe')
+  if not compiler.is_file():self.message('No se encontró el compilador C/C++ incluido.');return
+  target=self.workspace.resolve_safe_path(editor.path);output=self.workspace.root/'dist'/(target.stem+'.exe')
+  if kind=='run':
+   if not output.is_file():self.message('Primero pulsa Compilar EXE para este archivo C/C++.');return
+   program=output;args=[]
+  else:
+   program=compiler;args=['-std=c11' if target.suffix=='.c' else '-std=c++17','-Wall','-Wextra']
+   if kind=='check':args+=['-fsyntax-only',str(target)]
+   else:args+=['-O2',str(target),'-o',str(output)]
+  command=str(program)+' '+' '.join(args)
+  if QMessageBox.question(self,'AURAX · C/C++','Se ejecutará este proceso en el proyecto:\n\n'+command)!=QMessageBox.StandardButton.Yes:return
+  if kind=='build':output.parent.mkdir(exist_ok=True)
+  env=QProcessEnvironment.systemEnvironment();env.insert('PATH',str(compiler.parent)+os.pathsep+env.value('PATH'));self.process.setProcessEnvironment(env);self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(program),args);self.timeout.start(300000 if kind=='build' else 120000)
+ def run_installer(self,editor):
+  if not editor.path.lower().endswith('.iss'):self.message('Abre un script de Inno Setup (.iss).');return
+  if editor.base is None or editor.document().isModified():
+   if not self.save_current():return
+  compiler=self.runtime/'herramientas/inno/ISCC.exe'
+  if not compiler.is_file():self.message('No se encontró el compilador Inno Setup incluido.');return
+  target=str(self.workspace.resolve_safe_path(editor.path));command=str(compiler)+' '+target
+  if QMessageBox.question(self,'AURAX · Crear instalador','Compilar este script puede ejecutar instrucciones de su autor. Revisa primero el contenido.\n\n'+command)!=QMessageBox.StandardButton.Yes:return
+  self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(compiler),[target]);self.timeout.start(300000)
  def read_output(self):self.console.appendPlainText(bytes(self.process.readAllStandardOutput()).decode('utf-8','replace').rstrip())
  def finished(self,code,status):self.timeout.stop();self.read_output();self.console.appendPlainText('Proceso terminado · código de salida: '+str(code))
  def stop_process(self):

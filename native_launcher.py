@@ -68,9 +68,8 @@ class StartupSplash(QWidget):
  """Loading animation shown before the main window, until the model is ready."""
  def __init__(self,owner,path):
   super().__init__(None,Qt.WindowType.SplashScreen|Qt.WindowType.FramelessWindowHint)
-  self.owner=owner;self.setWindowTitle('Iniciando AURA');self.setWindowIcon(QIcon(str(ASSETS/'aura.ico')));self.resize(760,500);layout=QVBoxLayout(self);video=QVideoWidget();layout.addWidget(video,1);self.label=QLabel('Iniciando AURA · Preparando el modelo local…');self.label.setAlignment(Qt.AlignmentFlag.AlignCenter);layout.addWidget(self.label);row=QHBoxLayout();row.addWidget(btn('Activar / silenciar sonido',self.toggle_sound));row.addWidget(btn('Continuar mientras carga →',owner.finish_startup));layout.addLayout(row)
+  self.owner=owner;self.setWindowTitle('Iniciando AURA');self.setWindowIcon(QIcon(str(ASSETS/'aura.ico')));self.resize(760,500);layout=QVBoxLayout(self);layout.setContentsMargins(0,0,0,0);layout.setSpacing(0);video=QVideoWidget();layout.addWidget(video);self.setStyleSheet('background:black;')
   self.audio=QAudioOutput(self);self.audio.setMuted(True);self.player=QMediaPlayer(self);self.player.setAudioOutput(self.audio);self.player.setVideoOutput(video);self.player.setLoops(QMediaPlayer.Loops.Infinite);self.player.setSource(QUrl.fromLocalFile(str(path)));area=QApplication.primaryScreen().availableGeometry();self.move(area.center()-self.rect().center())
- def toggle_sound(self):self.audio.setMuted(not self.audio.isMuted())
  def begin(self):self.show();self.player.play()
  def release(self):self.player.stop();self.player.setSource(QUrl());self.hide();self.deleteLater()
 
@@ -87,7 +86,7 @@ class Window(QMainWindow):
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
   self.setWindowTitle('AURA · Inteligencia Artificial — Escritorio');self.setWindowIcon(QIcon(str(ASSETS/'aura-icono-transparente.png')));self.resize(1180,760);self.setMinimumSize(760,540)
   split=QSplitter();self.setCentralWidget(split);side=QWidget();side.setObjectName('sidebar');side.setMinimumWidth(220);side.setMaximumWidth(330);sl=QVBoxLayout(side);sl.setSpacing(3);sl.setContentsMargins(12,16,12,12);brand=QLabel('AURA IA');brand.setObjectName('brand');sl.addWidget(brand);sl.addWidget(QLabel('INTELIGENCIA ARTIFICIAL · LOCAL'))
-  for title,fn in [('＋ Nueva conversación',self.new_chat),('⌘ AURAX · Codificador',self.open_aurax),('◈ Modelos',self.models),('⚙ Pensamiento y ajustes',self.settings),('▣ Proyecto y archivos',self.project),('✧ Habilidades',self.skills_panel),('◉ Memoria',self.memory_panel),('♫ Voz y audio',self.voice_settings),('›_ Terminal y compilación',self.terminal),('↶ Cambios y deshacer',self.changes)]:
+  for title,fn in [('＋ Nueva conversación',self.new_chat),('⌘ AURAX · Codificador',self.open_aurax),('◎ Explorador de Internet',self.open_browser),('◈ Modelos',self.models),('⚙ Pensamiento y ajustes',self.settings),('▣ Proyecto y archivos',self.project),('✧ Habilidades',self.skills_panel),('◉ Memoria',self.memory_panel),('♫ Voz y audio',self.voice_settings),('›_ Terminal y compilación',self.terminal),('↶ Cambios y deshacer',self.changes)]:
    nav=btn(title,fn);nav.setObjectName('newChatButton' if title.startswith('＋') else 'navButton');sl.addWidget(nav)
   self.search=QLineEdit();self.search.setPlaceholderText('Buscar conversación…');self.search.textChanged.connect(self.filter_history);sl.addWidget(self.search);self.history=QListWidget();self.history.itemClicked.connect(self.select_chat);sl.addWidget(self.history)
   right=QWidget();rl=QVBoxLayout(right);top=QHBoxLayout();self.heading=QLabel('Nueva conversación');self.heading.setObjectName('chatTitle');self.heading.setFont(QFont('Segoe UI',14,QFont.Weight.Bold));top.addWidget(self.heading,1);self.mode=QComboBox();self.mode.addItems(['Conversación','AURAX · Programación']);top.addWidget(self.mode);self.temporary=QCheckBox('Temporal');self.temporary.setToolTip('Sin guardar conversación ni usar memoria.');top.addWidget(self.temporary);rl.addLayout(top)
@@ -100,6 +99,9 @@ class Window(QMainWindow):
   self.floating=FloatingAssistant(self)
   self.new_chat();self.refresh_history();self.timer=QTimer(self);self.timer.timeout.connect(self.progress);self.timer.start(300)
   self.startup=None;self.startup_finished=False;self.attached_files=[];self.aurax=None;self.aurax_dock=None;self.mode.currentIndexChanged.connect(lambda index:self.open_aurax() if index==1 else None)
+ def open_browser(self):
+  from agente_ia.native_browser import BrowserWindow
+  browser=BrowserWindow(self);browser.setWindowIcon(self.windowIcon());browser.show()
  def open_aurax(self):
   if self.aurax is None:
    self.aurax=AuraxWorkspace(self,ROOT);self.aurax.attach_requested.connect(self.attach_aurax_file);self.aurax_dock=QDockWidget('AURAX · Espacio de programación',self);self.aurax_dock.setWidget(self.aurax);self.aurax_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea);self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.aurax_dock)
@@ -162,7 +164,6 @@ class Window(QMainWindow):
    self.render_pending=False;delta=self.answer[getattr(self,'drawn',0):];self.chat.moveCursor(QTextCursor.MoveOperation.End);self.chat.insertPlainText(delta);self.drawn=len(self.answer)
   if self.warming:
    elapsed=str(round(time.monotonic()-self.started,1))+' s';self.status.setText('Preparando AURA · '+elapsed)
-   if self.startup is not None:self.startup.label.setText('Iniciando AURA · '+elapsed)
   if self.busy:
    first=self.client.first_text;self.status.setText(('Generando' if first else 'Preparando modelo y contexto')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(first,2))+' s' if first else ''))
  def send(self):

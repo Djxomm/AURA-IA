@@ -19,3 +19,5 @@ Los textos de licencias disponibles se conservan en `licenses/`. No se incluyen 
 - Eclipse Temurin/OpenJDK: GPLv2 con Classpath Exception y licencias por componente, conservadas en `licenses/languages/JDK-legal/`; el JDK incluye `lib/src.zip`. La licencia MIT de AURA no sustituye estas licencias.
 
 - React, Vue, Vite, sus plugins y dependencias de las plantillas: versiones en `frameworks/manifest.json`, integridades en los lockfiles y avisos en `licenses/frameworks/`. La caché offline incluida conserva los paquetes de origen.
+
+- Pygame 2.6.1 y sus bibliotecas SDL: LGPL y avisos del paquete, conservados en `licenses/pygame/` y en la distribución incluida de Pygame. Las plantillas originales de AURA conservan la licencia del proyecto.

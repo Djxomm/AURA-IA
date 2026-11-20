@@ -1,0 +1,7 @@
+Abre main.py en AURAX y pulsa Ejecutar. Usa flechas o WASD para mover el cuadro, Espacio para cambiar su color y Escape para salir. También puedes cerrar la ventana o pulsar Detener en AURAX.
+
+Verificar revisa la sintaxis. Compilar crea dist/MiJuegoAURA.exe, incluyendo la carpeta assets y las bibliotecas Pygame. Puedes cambiar el nombre, los recursos y el icono en aura-game.json. El EXE generado no requiere instalar Python en el equipo de destino.
+
+La plantilla limita el ciclo a 60 FPS y solo inicializa pantalla y fuentes. El audio se inicializa si tu juego lo necesita. Bibliotecas opcionales como NumPy se añaden por separado si el proyecto las requiere.
+
+Conserva los avisos de licencia de Pygame, SDL y los recursos que utilices cuando distribuyas tu juego.

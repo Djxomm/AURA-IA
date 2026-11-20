@@ -151,3 +151,20 @@ Verificar utiliza `typecheck`, `type-check`, `lint` o `build`, según los script
 Se probaron ambas plantillas: preparación con `npm ci --offline`, compilación, renderizado, clic en un botón y cierre del servidor con sus procesos secundarios. Las versiones incluidas son React 19.3.1, Vue 3.5.46 y Vite 7.3.8.
 
 Para reproducir el paquete desde fuente, prepara Node y w64devkit y ejecuta `python scripts/prepare_frameworks.py`. El script usa los archivos de bloqueo, genera la caché y compila el lanzador de procesos. No se guardan `node_modules` ni la caché binaria en GitHub. El instalador copia `runtime/frameworks`, `runtime/herramientas/aura-web` y las licencias junto a los demás componentes.
+
+## Pygame incluido para juegos 2D
+
+En AURAX selecciona **Nuevo → Juego Pygame**, elige una carpeta nueva y usa los mismos botones:
+
+- **Verificar** revisa la sintaxis.
+- **Ejecutar** abre el juego, sin cortarlo automáticamente a los dos minutos.
+- **Compilar** genera `dist/MiJuegoAURA.exe` con Pygame, el icono y los recursos declarados.
+- **Detener** termina el proceso y sus descendientes; también puedes cerrar el juego o usar Escape.
+
+La plantilla usa flechas/WASD para mover un cuadro, Espacio para cambiar su color y un ciclo limitado a 60 FPS. Inicializa pantalla y fuentes, dejando audio y módulos adicionales para cuando el proyecto los necesite. Pygame no se importa al iniciar la interfaz de AURA.
+
+El instalador incorpora Pygame 2.6.1 en el Python 3.13 incluido, junto con una rueda CPython 3.13 Windows x64 cuyo SHA-256 se verifica. No se necesita Internet para crear, ejecutar o compilar esta plantilla. Para desarrollo con otro Python utiliza `requirements-pygame.txt`. Para preparar el SDK del instalador desde fuente usa `scripts/prepare_pygame.py`, después de preparar el Python portable con PyInstaller.
+
+`aura-game.json` permite definir el nombre del EXE, icono y carpetas de recursos. Las rutas deben permanecer dentro del proyecto. La plantilla muestra cómo localizar recursos en ejecución normal y dentro del EXE. Otros juegos deben declarar sus recursos antes de compilar. Bibliotecas opcionales como NumPy se agregan por separado cuando hagan falta.
+
+Se probaron sintaxis, ejecución, Detener y generación del EXE. El EXE ejecutó una prueba gráfica aislada con SDL dummy: cargó recursos, dibujó texto y formas y procesó eventos simulados. Esto no prueba GPU, teclado físico ni audio de otro equipo. Las licencias y procedencia están en `licenses/pygame/`; conserva sus avisos y los de SDL y tus recursos al distribuir juegos.

@@ -1,0 +1,1 @@
+Pygame 2.6.1 se distribuye bajo LGPL 2.1. Conserva sus avisos y los de SDL y sus dependencias al distribuir juegos. Fuentes y avisos del proyecto: https://github.com/pygame/pygame/tree/2.6.1 . La distribución de Pygame permanece separada en herramientas/python/Lib/site-packages/pygame y se conserva una rueda verificada para reinstalación offline.

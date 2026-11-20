@@ -1,0 +1,7 @@
+{
+  "engine": "pygame",
+  "name": "MiJuegoAURA",
+  "entry": "main.py",
+  "asset_folders": ["assets"],
+  "icon": "assets/icon.ico"
+}

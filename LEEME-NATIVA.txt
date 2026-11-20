@@ -1,4 +1,4 @@
-﻿AURA Inteligencia Artificial 3.5.0 — Escritorio nativo Windows 10 x64
+﻿AURA Inteligencia Artificial 3.6.0 — Escritorio nativo Windows 10 x64
 
 Ventana propia Qt. No inicia un navegador externo ni un servidor web para la interfaz. El explorador integrado de Internet es opcional. Motor CPU Qwen2.5-Coder 1.5B Q4_K_M con bibliotecas SSE4.2/x64; no utiliza AVX ni CUDA para generar texto. Ajuste inicial: 2 hilos. El i5 de primera generación de destino no se ha probado físicamente.
 
@@ -57,3 +57,11 @@ Compilar usa el script build y genera los archivos web, normalmente en dist, no 
 Preparar dependencias sin conexión usa la caché incluida. Instalar con Internet sirve para dependencias adicionales. Ambas opciones desactivan scripts de instalación, auditoría y avisos de actualización; si un proyecto necesita postinstall o pasos especiales, revisa esos comandos por separado en Terminal. Los scripts dev/build del proyecto sí ejecutan código y se muestran antes de autorizar. El control de procesos evita dejar servidores abandonados; no es un aislamiento de seguridad para código desconocido.
 
 Versiones de las plantillas: React 19.3.1, Vue 3.5.46 y Vite 7.3.8. Los procesos web usan inicialmente 768 MB de heap Node; proyectos grandes pueden necesitar otros ajustes. Los componentes solo se ponen en marcha al utilizarlos.
+
+Pygame 3.6: en AURAX pulsa Nuevo y selecciona Juego Pygame. Escribe una carpeta nueva. La plantilla y Pygame 2.6.1 ya están incluidos; no se necesita Internet ni instalar Pygame en el Python del sistema. Verificar revisa sintaxis, Ejecutar abre el juego y Compilar crea dist/MiJuegoAURA.exe. No se carga Pygame al iniciar AURA: solo al ejecutar o compilar el proyecto.
+
+El juego de ejemplo usa flechas o WASD para mover, Espacio para cambiar color y Escape para salir. También puede cerrarse desde su ventana o con Detener en AURAX. La ejecución no tiene el límite automático de dos minutos. Los procesos del juego se controlan con el mismo Job Object de Windows que las vistas previas web.
+
+La compilación incluye las bibliotecas Pygame, el icono y las carpetas declaradas en aura-game.json. Mantén los recursos dentro del proyecto; la plantilla ya incluye assets y una ruta compatible con el EXE. Para otros juegos declara sus carpetas de recursos antes de compilar. Las bibliotecas opcionales, como NumPy, se añaden únicamente si el proyecto las necesita.
+
+Se comprobó la revisión de sintaxis, ejecución y Detener, compilación del juego a EXE, carga de recursos, dibujo y eventos simulados. Las pruebas gráficas se ejecutaron con el controlador SDL dummy en modo aislado; no constituyen una prueba de GPU, teclado físico ni audio de tu equipo. El EXE generado se ejecutó sin usar Python del sistema. Se conservan la rueda offline y los avisos de licencia del paquete.

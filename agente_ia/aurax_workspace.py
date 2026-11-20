@@ -23,7 +23,7 @@ class AuraxWorkspace(QWidget):
   super().__init__();self.owner=owner;self.runtime=Path(runtime);self.workspace=SafeWorkspace(owner.store.get_settings().workspace_path);self.process=QProcess(self);self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels);self.process.readyReadStandardOutput.connect(self.read_output);self.process.finished.connect(self.finished);self.process.errorOccurred.connect(lambda error:self.console.appendPlainText('No se pudo ejecutar el proceso: '+self.process.errorString()));self.timeout=QTimer(self);self.timeout.setSingleShot(True);self.timeout.timeout.connect(self.stop_process);self.web_url=None;self.web_preview=None;self.web_preview_opened=False
   layout=QVBoxLayout(self);layout.setContentsMargins(8,8,8,8);title=QLabel('AURAX · Codificador');title.setFont(QFont('Segoe UI',15,QFont.Weight.Bold));titlebar=QHBoxLayout();titlebar.addWidget(title,1);import_code=QPushButton('Revisar código IA');import_code.clicked.connect(self.import_response);titlebar.addWidget(import_code);layout.addLayout(titlebar);self.path_label=QLabel(str(self.workspace.root));self.path_label.setWordWrap(True);layout.addWidget(self.path_label)
   toolbar=QHBoxLayout()
-  for text,fn in [('Proyecto',owner.project),('Nuevo',self.new_file),('Guardar',self.save_current),('Adjuntar a AURAX',self.attach),('Proyecto web',self.web_menu)]:
+  for text,fn in [('Proyecto',owner.project),('Nuevo',self.new_menu),('Guardar',self.save_current),('Adjuntar a AURAX',self.attach),('Proyecto web',self.web_menu)]:
    button=QPushButton(text);button.clicked.connect(fn);toolbar.addWidget(button)
   layout.addLayout(toolbar);split=QSplitter();self.model=QFileSystemModel(self);self.model.setRootPath(str(self.workspace.root));self.tree=QTreeView();self.tree.setModel(self.model);self.tree.setHeaderHidden(True);self.tree.setRootIndex(self.model.index(str(self.workspace.root)));self.tree.doubleClicked.connect(lambda index:self.open_path(self.model.filePath(index)))
   for column in (1,2,3):self.tree.hideColumn(column)
@@ -66,6 +66,22 @@ class AuraxWorkspace(QWidget):
    if editor.document().isModified():raise ValueError('Esta pestaña tiene cambios pendientes. Guárdalos antes de cargar otra propuesta.')
    editor.setPlainText(match.group(2));editor.document().setModified(True);self.console.appendPlainText('Propuesta cargada en el editor. Revisa y pulsa Guardar para aprobar el cambio; todavía no se modificó el archivo.')
   except Exception as exc:self.message(exc)
+ def new_menu(self):
+  menu=QMenu(self);menu.addAction('Archivo',self.new_file);menu.addAction('Juego Pygame',self.new_game)
+  from PySide6.QtGui import QCursor
+  menu.exec(QCursor.pos())
+ def new_game(self):
+  if (self.runtime/'skills/pygame/SKILL.md').is_file():self.owner.skills.install_bundled(self.runtime/'skills','pygame')
+  from .game_tools import create_game
+  if self.owner.busy or self.process.state()!=QProcess.ProcessState.NotRunning:self.message('Termina o detén la tarea actual antes de crear otro proyecto.');return
+  if any(self.tabs.widget(i).document().isModified() for i in range(self.tabs.count())):self.message('Guarda los archivos modificados antes de crear otro proyecto.');return
+  name,ok=QInputDialog.getText(self,'AURAX · Juego Pygame','Nombre de una carpeta nueva:',text='mi-juego')
+  if not ok or not name.strip():return
+  try:
+   target=self.workspace.resolve_safe_path(name.strip(),allow_write=True);create_game(self.runtime,target)
+   if not self.set_project(target):return
+   self.owner.store.save_settings(self.owner.store.get_settings().model_copy(update={'workspace_path':str(target)}));self.owner.attached_files.clear();self.owner.new_chat();self.open_path(str(target/'main.py'));self.console.appendPlainText('Juego Pygame listo. Usa Verificar, Ejecutar o Compilar. Flechas/WASD para mover, Espacio para cambiar color y Escape para salir.')
+  except Exception as error:self.message(error)
  def new_file(self):
   name,ok=QInputDialog.getText(self,'AURAX · Nuevo archivo','Ruta relativa, por ejemplo src/programa.py:')
   if not ok or not name.strip():return
@@ -127,9 +143,18 @@ class AuraxWorkspace(QWidget):
   if not python.exists():python=Path(sys.executable) if not getattr(sys,'frozen',False) else Path(shutil.which('python') or '')
   if not python.is_file():self.message('No se encontró Python. Configura las herramientas antes de compilar.');return
   target=str(self.workspace.resolve_safe_path(editor.path));args={'check':['-m','py_compile',target],'run':[target],'build':['-m','PyInstaller','--noconfirm','--onefile','--name',Path(editor.path).stem,target]}[kind]
+  try:
+   from .game_tools import is_pygame_file,pygame_arguments
+   game=is_pygame_file(self.workspace.root,target)
+   if game:args=pygame_arguments(self.workspace.root,target,kind)
+  except Exception as error:self.message(error);return
+  wrapper=self.runtime/'herramientas/aura-web/aura-job.exe'
+  if game and not wrapper.is_file():self.message('No se encontró el controlador de procesos del juego.');return
   command=str(python)+' '+ ' '.join(args)
   if QMessageBox.question(self,'AURAX · Autorizar proceso','Se ejecutará en el proyecto seleccionado:\n\n'+command)!=QMessageBox.StandardButton.Yes:return
-  env=QProcessEnvironment.systemEnvironment();env.insert('PYTHONUTF8','1');env.insert('PYTHONIOENCODING','utf-8');env.insert('PATH',str(python.parent)+os.pathsep+env.value('PATH'));self.process.setProcessEnvironment(env);self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(python),args);self.timeout.start(300000 if kind=='build' else 120000)
+  env=QProcessEnvironment.systemEnvironment();env.insert('PYTHONUTF8','1');env.insert('PYTHONIOENCODING','utf-8');env.insert('PATH',str(python.parent)+os.pathsep+env.value('PATH'));self.process.setProcessEnvironment(env);self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(wrapper),[str(python),*args]) if game else self.process.start(str(python),args)
+  if game and kind=='run':self.timeout.stop()
+  else:self.timeout.start(300000 if kind=='build' else 120000)
  def web_menu(self):
   menu=QMenu(self)
   for title,action in [('Abrir vista previa','preview'),('Nuevo React','new-react'),('Nuevo Vue.js','new-vue'),('Preparar dependencias sin conexión','offline'),('Instalar dependencias con Internet','online')]:

@@ -38,6 +38,7 @@ class NativeOutputFilter:
  def feed(self,text):
   out=[];prefix='llama_completion:'
   for ch in text:
+   if ch=='\r':continue
    if self.discard:
     if ch=='\n':self.discard=False;self.start=True;self.held=''
     continue
@@ -65,7 +66,7 @@ class NativeClient:
   self.cancelled.clear();self.first_text=None
   if not self.model.is_file():raise ProviderError('No se encontró el modelo GGUF.')
   # This lightweight transport supports the Qwen ChatML family explicitly.
-  prompt=''.join('<|im_start|>'+str(x['role'])+'\n'+str(x.get('content',''))+'<|im_end|>\n' for x in messages)+'<|im_start|>assistant\n'
+  prompt=''.join('<|im_start|>'+str(x['role'])+'\n'+str(x.get('content','')).replace('\r','')+'<|im_end|>\n' for x in messages)+'<|im_start|>assistant\n'
   budget=settings.max_predict_tokens or {'rapido':256,'equilibrado':512,'profundo':1024}[settings.thinking_effort]
   effective=settings.num_ctx
   if self.auto_context and len(prompt)//2+128+min(budget,512)>effective and effective<8192:effective=8192

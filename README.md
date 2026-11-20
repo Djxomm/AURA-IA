@@ -14,6 +14,12 @@ El agente utiliza el mismo modelo local y las aprobaciones de cambios. Las respu
 
 Se comprobó una compilación desde el panel y se ejecutó el EXE resultante. Un modelo pequeño puede equivocarse en rutas o código; revisa las propuestas. La preparación de una tarea de programación larga puede tardar bastante más que una consulta corta con caché.
 
+## Creación de proyectos (3.7)
+
+Las peticiones para crear juegos o programas abren AURAX. Se conserva la última elección de lenguaje al continuar una tarea. Si el modelo responde con un único archivo completo en un bloque de código, se convierte en una propuesta revisable; nunca se guarda sin aprobación. Se comprueba la sintaxis de Python y, con Node disponible, JavaScript. Los fragmentos truncados, marcadores pendientes y lenguajes incorrectos generan una corrección limitada o un resultado incompleto explícito.
+
+La revisión estática no prueba que un juego funcione ni garantiza que cumpla toda la petición. El modelo de 1.5B puede necesitar tareas más pequeñas o un modelo más capaz. Guardar, ejecutar y compilar son acciones distintas.
+
 ## Funciones
 
 - Conversación y modo Programación, propuestas de cambios con revisión, historial y deshacer.

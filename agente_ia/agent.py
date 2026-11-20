@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import tempfile
+import subprocess
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -357,6 +358,16 @@ class AgentEngine:
             await _emit(emit, "error", {"message": str(exc)})
             return {"status": "error", "error": str(exc)}
 
+        from .code_artifacts import file_task_requested, task_brief, expected_language, code_proposal, validate_code
+        task_history = self.storage.get_messages(session_id, limit=60)
+        creating = file_task_requested(user_message, task_history)
+        brief = task_brief(task_history, user_message) if creating else ''
+        expected = expected_language(brief) if creating else None
+        if creating:
+            settings = settings.model_copy(update={'max_predict_tokens': min(4096, max(settings.max_predict_tokens, 3072))})
+        retries = 0
+        applied_paths = []
+        declined = False
         attachments = attached_files or []
         attached_context = self._build_attached_context(workspace, attachments, settings)
         history = self.storage.get_messages(session_id, limit=settings.max_history_messages)
@@ -386,6 +397,9 @@ class AgentEngine:
         from .aura_api import effort_instruction
         system_prompt += "\n" + effort_instruction(settings)
         system_prompt += self.skills_store.manifest()
+        if creating:
+            system_prompt += '\nEl usuario pide archivos reales. Respeta la última elección de lenguaje. No entregues solo ideas, ejemplos ni marcadores pendientes. Usa create_file/write_file con archivos completos; la interfaz pedirá aprobación. Nunca digas que ejecutaste o compilaste si no hubo una herramienta que lo hiciera. Para un juego HTML sencillo prefiere un index.html autocontenido.\nEspecificación vigente:\n'+brief
+            history = []
         conversation: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         for item in history:
             role = item["role"]
@@ -405,6 +419,12 @@ class AgentEngine:
         final_content = ""
 
         for step in range(1, settings.max_steps + 1):
+            if creating and declined:
+                message = 'No apliqué cambios: rechazaste la propuesta.'
+                self.storage.add_message(session_id, 'assistant', message, metadata={'tools':tool_traces})
+                await _emit(emit, 'done', {'content':message,'steps':step-1})
+                return {'status':'done','content':message,'steps':step-1}
+            promoted = False
             if cancel_event and cancel_event.is_set():
                 await _emit(emit, "error", {"message": "Generación cancelada por el usuario."})
                 return {"status": "cancelled", "content": final_content}
@@ -450,8 +470,28 @@ class AgentEngine:
                 last_tok_per_sec = response.tok_per_sec
             last_mode = response.used_tool_mode
 
+            if creating and not response.tool_calls and not applied_paths and not declined:
+                try:
+                    name, arguments = code_proposal(response.content, expected, workspace, getattr(self.llm_client, 'runtime', None))
+                    promoted = True
+                    response.tool_calls = [ToolCall(id='artifact_'+uuid.uuid4().hex[:10], name=name, arguments=arguments)]
+                    await _emit(emit, 'stream_clean', {'content':'Preparando el archivo completo para tu revisión.', 'step':step})
+                except (ValueError, SyntaxError, OSError, subprocess.TimeoutExpired) as error:
+                    if retries < 2 and step < settings.max_steps:
+                        retries += 1
+                        await _emit(emit, 'stream_clean', {'content':'La respuesta no produjo un archivo completo. Reintentando la creación ('+str(retries)+'/2).', 'step':step})
+                        conversation = [conversation[0], {'role':'user','content':brief+'\nCORRECCIÓN: '+str(error)+'\nEntrega UN archivo completo en '+str(expected or 'el lenguaje solicitado')+'. Usa create_file con JSON válido, o un único bloque de código completo. Sin explicaciones, sin puntos suspensivos y sin repetir fragmentos anteriores.'}]
+                        continue
+                    message = 'No creé archivos: el modelo no produjo código completo y válido para esta petición. '+str(error)+' Puedes dividir la tarea o elegir un modelo más capaz. No se ejecutó ni compiló ningún juego.'
+                    self.storage.add_message(session_id, 'assistant', message, metadata={'status':'incomplete','tools':tool_traces})
+                    await _emit(emit, 'done', {'content':message,'status':'incomplete','steps':step})
+                    return {'status':'incomplete','content':message,'steps':step}
             if not response.tool_calls:
                 final_content = response.content or "(Sin respuesta de texto del modelo)"
+                if creating and applied_paths:
+                    final_content = 'Archivos guardados con tu aprobación: '+', '.join(dict.fromkeys(applied_paths))+'. La revisión estática no sustituye probar el proyecto. No se ejecutó ni compiló automáticamente; usa Verificar, Ejecutar o Compilar en AURAX.'
+                elif creating and declined:
+                    final_content = 'No apliqué cambios: rechazaste la propuesta.' 
                 self.storage.add_message(
                     session_id,
                     "assistant",
@@ -548,6 +588,11 @@ class AgentEngine:
                             workspace=workspace,
                             tc=tc,
                         )
+                        if creating and proposal.proposed_content is not None and proposal.action in ('create','write'):
+                            try:
+                                validate_code(proposal.file_path, proposal.proposed_content, expected, getattr(self.llm_client, 'runtime', None))
+                            except (ValueError, SyntaxError, OSError, subprocess.TimeoutExpired) as error:
+                                raise WorkspaceError(str(error)) from error
                     except WorkspaceError as exc:
                         err_text = f"No se pudo preparar el cambio en {tc.name}: {exc}"
                         tool_traces.append({"name": tc.name, "ok": False, "summary": err_text})
@@ -598,6 +643,7 @@ class AgentEngine:
                                 proposal.base_hash,
                             )
                             proposal.status = "applied"
+                            applied_paths.append(proposal.file_path)
                             self.storage.resolve_change_record(
                                 proposal.id,
                                 status="applied",
@@ -622,6 +668,7 @@ class AgentEngine:
                             ok_flag = False
                     else:
                         proposal.status = "rejected"
+                        declined = not bool(decision.feedback.strip())
                         proposal.feedback = decision.feedback
                         self.storage.resolve_change_record(
                             proposal.id,
@@ -679,11 +726,20 @@ class AgentEngine:
                     }
                 )
 
+            if promoted and applied_paths:
+                message = 'Archivo guardado con tu aprobación: '+', '.join(dict.fromkeys(applied_paths))+'. Abierto en AURAX. Usa Verificar y Ejecutar para probarlo; no se ejecutó ni compiló automáticamente.'
+                self.storage.add_message(session_id, 'assistant', message, metadata={'tools':tool_traces})
+                await _emit(emit, 'done', {'content':message,'steps':step})
+                return {'status':'done','content':message,'steps':step}
+
         # Se alcanzó max_steps sin respuesta final limpia
         fallback_msg = (
             f"Se alcanzó el límite de {settings.max_steps} pasos en este turno para cuidar el contexto "
             "del modelo local. Puedes pedir que continúe en el siguiente mensaje."
         )
+        result_status = 'incomplete' if creating else 'done'
+        if creating:
+            fallback_msg = ('Se guardaron estos archivos: '+', '.join(dict.fromkeys(applied_paths))+'. El proyecto sigue incompleto; falta verificarlo.' if applied_paths else 'No se creó el proyecto: el modelo agotó los pasos sin guardar archivos completos. Prueba una tarea más pequeña o un modelo más capaz.')
         self.storage.add_message(
             session_id,
             "assistant",
@@ -707,7 +763,7 @@ class AgentEngine:
                 "steps": settings.max_steps,
             },
         )
-        return {"status": "done", "content": fallback_msg, "steps": settings.max_steps}
+        return {"status": result_status, "content": fallback_msg, "steps": settings.max_steps}
 
     def revert_change(self, change_id: str) -> dict[str, Any]:
         """Revierte un cambio aplicado en disco al estado previo registrado."""

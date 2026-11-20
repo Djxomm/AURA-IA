@@ -1,3 +1,6 @@
+AURA 3.7.0: creación de proyectos
+Las peticiones para crear juegos o programas pasan a AURAX. Los archivos se revisan antes de guardarlos. Si el modelo entrega fragmentos o un lenguaje incorrecto, se reintenta de forma limitada y se informa que la tarea quedó incompleta. Guardar no equivale a verificar, ejecutar o compilar. El modelo local pequeño puede necesitar tareas divididas o un modelo más capaz.
+
 ﻿AURA Inteligencia Artificial 3.6.0 — Escritorio nativo Windows 10 x64
 
 Ventana propia Qt. No inicia un navegador externo ni un servidor web para la interfaz. El explorador integrado de Internet es opcional. Motor CPU Qwen2.5-Coder 1.5B Q4_K_M con bibliotecas SSE4.2/x64; no utiliza AVX ni CUDA para generar texto. Ajuste inicial: 2 hilos. El i5 de primera generación de destino no se ha probado físicamente.

@@ -1,0 +1,6 @@
+CIRCUITO NEÓN · AURA
+Abre index.html. Funciona sin Internet. En AURAX abre index.html y pulsa Ejecutar.
+Flechas / A-D: girar. Espacio: turbo. P: pausa. R: reinicia.
+Diez etapas de 350 metros. Tienes tres vidas. Evita los autos de tráfico.
+No requiere Python ni Pygame: esta versión es HTML5 y JavaScript, como pediste.
+Ejemplo creado por el asistente para que puedas jugar y revisar el proyecto; no es prueba de generación autónoma del modelo pequeño de AURA.

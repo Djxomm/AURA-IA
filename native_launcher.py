@@ -177,6 +177,9 @@ class Window(QMainWindow):
  def send(self):
   text=self.input.toPlainText().strip()
   if self.busy or self.warming or not text:return
+  from agente_ia.code_artifacts import file_task_requested
+  recent=self.store.get_messages(self.sid,limit=60) if self.sid else []
+  if not self.temporary.isChecked() and file_task_requested(text,recent):self.open_aurax()
   if self.temporary.isChecked() and self.mode.currentIndex()==1:self.error('El modo temporal es solo conversación. Desactívalo para trabajar sobre archivos.');return
   settings=self.store.get_settings();project=settings.workspace_path
   if text.lower().startswith(('recuerda:','recuerda esto:')):
@@ -224,6 +227,7 @@ class Window(QMainWindow):
    elif event=='proposal_resolved' and payload.get('status')=='applied':
     self.run_changes=getattr(self,'run_changes',0)+1
     if self.aurax is not None:self.aurax.console.appendPlainText('Agente: cambio aplicado en '+payload.get('file_path',''));self.aurax.refresh_after_agent()
+    if self.aurax is not None and (self.aurax.tabs.currentWidget() is None or Path(payload.get('file_path','')).name in {'index.html','main.py'}):self.aurax.open_path(str(self.aurax.workspace.resolve_safe_path(payload['file_path'])))
    elif event in ('tool_start','tool_result'):
     if self.aurax is not None:self.aurax.console.appendPlainText(payload.get('summary') or payload.get('name') or event)
    elif event=='error':self.status.setText(payload.get('message','Error'))

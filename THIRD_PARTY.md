@@ -13,3 +13,7 @@ La licencia MIT del proyecto se aplica al código original de AURA, no sustituye
 Los textos de licencias disponibles se conservan en `licenses/`. No se incluyen claves ni grabaciones de referencia en el repositorio.
 
 - SQLAlchemy, pg8000, PyMySQL, pyodbc, python-oracledb, sqlparse y dependencias: versiones y textos de licencia en `licenses/sql-drivers/`. Los controladores nativos ODBC de otros fabricantes se instalan por separado.
+
+- Node.js/OpenJS Foundation: MIT y avisos de sus dependencias en `licenses/languages/Node-LICENSE.txt`.
+- PHP Group: PHP License 3.01; texto incluido en `licenses/languages/PHP-LICENSE.txt`.
+- Eclipse Temurin/OpenJDK: GPLv2 con Classpath Exception y licencias por componente, conservadas en `licenses/languages/JDK-legal/`; el JDK incluye `lib/src.zip`. La licencia MIT de AURA no sustituye estas licencias.

@@ -110,6 +110,7 @@ class Window(QMainWindow):
   from agente_ia.native_browser import BrowserWindow
   browser=BrowserWindow(self);browser.setWindowIcon(self.windowIcon());browser.show()
  def open_aurax(self):
+  if (ROOT/'skills/multilenguaje/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','multilenguaje')
   if self.aurax is None:
    self.aurax=AuraxWorkspace(self,ROOT);self.aurax.attach_requested.connect(self.attach_aurax_file);self.aurax_dock=QDockWidget('AURAX · Espacio de programación',self);self.aurax_dock.setWidget(self.aurax);self.aurax_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea);self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.aurax_dock)
   self.aurax_dock.show();self.aurax_dock.raise_()
@@ -342,7 +343,7 @@ class Window(QMainWindow):
    runbutton.setEnabled(False);output.setPlainText('Ejecutando…')
    def work():
     try:
-     env=os.environ.copy();env['PATH']=str(ROOT/'herramientas/python')+os.pathsep+env.get('PATH','');p=subprocess.run(cmd,shell=True,cwd=self.store.get_settings().workspace_path,env=env,capture_output=True,timeout=120,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));text=p.stdout.decode('utf-8','replace')+p.stderr.decode('utf-8','replace')+'\nCódigo de salida: '+str(p.returncode)
+     env=os.environ.copy();env['PATH']=os.pathsep.join(str(ROOT/part) for part in ['herramientas/python','herramientas/node','herramientas/php','herramientas/jdk/bin','herramientas/w64devkit/bin','herramientas/inno'])+os.pathsep+env.get('PATH','');env['JAVA_HOME']=str(ROOT/'herramientas/jdk');p=subprocess.run(cmd,shell=True,cwd=self.store.get_settings().workspace_path,env=env,capture_output=True,timeout=120,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));text=p.stdout.decode('utf-8','replace')+p.stderr.decode('utf-8','replace')+'\nCódigo de salida: '+str(p.returncode)
     except Exception as e:text=str(e)
     bus.event.emit('output',text)
    threading.Thread(target=work,daemon=True).start()

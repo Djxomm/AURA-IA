@@ -1,4 +1,4 @@
-﻿AURA Inteligencia Artificial 3.3.0 — Escritorio nativo Windows 10 x64
+﻿AURA Inteligencia Artificial 3.4.0 — Escritorio nativo Windows 10 x64
 
 Ventana propia Qt. No inicia un navegador externo ni un servidor web para la interfaz. El explorador integrado de Internet es opcional. Motor CPU Qwen2.5-Coder 1.5B Q4_K_M con bibliotecas SSE4.2/x64; no utiliza AVX ni CUDA para generar texto. Ajuste inicial: 2 hilos. El i5 de primera generación de destino no se ha probado físicamente.
 
@@ -41,3 +41,9 @@ Selecciona una tabla para ver columnas y tipos. Escribe una sola instrucción (h
 Se muestran hasta 500 filas, 100 columnas y 2000 caracteres por celda. Exportar CSV guarda solo las filas visibles y no es un respaldo completo. Respaldo SQLite crea un archivo nuevo y verifica su integridad. Para respaldos/restauraciones de otros motores usa sus utilidades nativas y prueba la restauración en una base separada. Las operaciones SQL se ejecutan en segundo plano; los tiempos de espera dependen también del controlador. No cierres el programa mientras hay una operación activa.
 
 Pedir ayuda a AURAX prepara un mensaje editable con el motor, la estructura seleccionada y el SQL del editor. No incorpora las filas obtenidas ni la contraseña de conexión. Revisa el mensaje y pulsa Enviar. Usar SQL de AURA carga su propuesta como borrador, nunca la ejecuta automáticamente. La habilidad Bases de datos SQL se incluye para orientar las propuestas. La conexión cifrada verifica certificados; las excepciones del explorador web no se aplican a bases de datos.
+
+Lenguajes 3.4: AURAX reconoce JavaScript (.js/.mjs/.cjs), Java (.java), HTML5 (.html/.htm) y PHP (.php), además de Python, C/C++ y scripts de Inno Setup. Los mismos botones eligen la herramienta por la extensión. JavaScript usa Node.js 22.23.5; PHP usa PHP 8.4.28 por consola; Java usa Eclipse Temurin JDK 25.0.4.1. Las herramientas se inician únicamente al utilizarlas. Node tiene límite de heap de 256 MB, PHP 128 MB y Java 256 MB con dos procesadores activos. Son límites iniciales para trabajos pequeños; proyectos grandes pueden ejecutarse con ajustes propios desde Terminal.
+
+Verificar revisa sintaxis en JavaScript/PHP y compila Java a .class. Compilar genera EXE para Python/C++ y .class para Java en build/aurax-java; JavaScript, HTML5 y PHP no se convierten automáticamente a EXE. Ejecutar corre el código o abre una vista previa local HTML5 dentro de AURA, sin servidor web. En HTML se hace una revisión de lectura básica, que no sustituye un validador completo. PHP de consola no crea un sitio web ni simula automáticamente una petición HTTP.
+
+Los proyectos con bibliotecas externas necesitan sus dependencias. Node incluye npm; Java incluye herramientas del JDK. Terminal incorpora rutas de las herramientas incluidas sin modificar permanentemente Windows. Cada ejecución se revisa antes de autorizarse. Las habilidades Bases de datos SQL y Programación multilenguaje están disponibles en Habilidades; activarlas no concede permisos nuevos.

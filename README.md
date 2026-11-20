@@ -114,3 +114,24 @@ Probado con operaciones reales de SQLite, incluyendo consultas, escrituras, prot
 Límites: una instrucción por ejecución, hasta 12000 caracteres de SQL, 500 filas, 100 columnas y 2000 caracteres por celda. Exportar CSV guarda las filas mostradas y protege campos que una hoja de cálculo podría interpretar como fórmulas. No es un respaldo completo. El botón de respaldo es para SQLite; otros motores usan herramientas nativas.
 
 Los filtros de consultas no sustituyen los permisos del servidor: usa una cuenta de solo lectura cuando corresponda. DDL puede confirmar cambios automáticamente en algunos motores. Conserva un respaldo antes de modificar datos o estructuras. Las excepciones de certificados del explorador web no se aplican a las bases de datos.
+
+## JavaScript, Java, HTML5 y PHP
+
+Los mismos botones de AURAX reconocen el lenguaje por la extensión del archivo:
+
+| Archivo | Verificar | Ejecutar | Compilar |
+| --- | --- | --- | --- |
+| Python | Revisa sintaxis | Ejecuta Python | Genera EXE con PyInstaller |
+| C/C++ | Revisa sintaxis | Ejecuta el EXE compilado | Genera EXE con GCC |
+| JavaScript `.js/.mjs/.cjs` | Node.js `--check` | Node.js | No genera EXE automáticamente |
+| Java `.java` | Compila con javac | Ejecuta el archivo fuente | Genera `.class` en `build/aurax-java` |
+| HTML5 `.html/.htm` | Revisión básica de lectura | Vista previa nativa con JavaScript del navegador | No requiere compilación |
+| PHP `.php` | Comprueba sintaxis | PHP por consola | No genera EXE automáticamente |
+
+La vista previa HTML5 se abre dentro de AURA, sin iniciar un servidor web. La comprobación básica no sustituye un validador HTML5 completo. PHP CLI no crea por sí solo un servidor ni una petición HTTP. Los proyectos con bibliotecas necesitan sus dependencias; Node incluye npm. La terminal usa las herramientas incluidas sin cambiar permanentemente el PATH de Windows.
+
+El paquete privado incluye Node.js 22.23.5, Eclipse Temurin JDK 25.0.4.1+1 y PHP 8.4.28 NTS x64. No se cargan al iniciar AURA. Los límites iniciales son 256 MB de heap en Node y Java y 128 MB en PHP; Java utiliza dos procesadores activos. Los proyectos grandes pueden necesitar ajustar estos parámetros desde la terminal. Las herramientas y los paquetes adicionales no modifican la capacidad del modelo local ni garantizan que genere código correcto.
+
+Se probaron programas reales de los tres lenguajes, compilación Java y una página HTML5 que modificó el DOM mediante JavaScript. La habilidad **Programación multilenguaje** se puede activar desde Habilidades.
+
+Para construir desde fuente, coloca las distribuciones oficiales en `runtime/herramientas/node`, `runtime/herramientas/jdk` y `runtime/herramientas/php`. Versiones, procedencia y licencias están en `licenses/languages/`. El instalador incluye estas herramientas; el repositorio contiene su código de integración y avisos, sin duplicar los binarios.

@@ -68,8 +68,13 @@ class BrowserWindow(QMainWindow):
         self.profile.downloadRequested.connect(lambda item: item.cancel())
         self.view.urlChanged.connect(self.url_changed)
         self.view.loadProgress.connect(lambda progress: self.status.setText(f'Cargando sitio… {progress}%'))
-        self.view.loadFinished.connect(lambda ok: self.status.setText(('Sitio cargado · ' if ok else 'No se pudo cargar · ') + ('HTTP sin cifrar' if self.view.url().scheme() == 'http' else 'HTTPS; consulta los avisos de certificado')))
+        self.view.loadFinished.connect(self.load_finished)
         self.view.setHtml('<html><body style="background:#0b1424;color:#e4eaf4;font-family:Segoe UI;padding:40px"><h1>Explorador AURA</h1><p>Escribe una dirección para comenzar.</p></body></html>')
+
+    def load_finished(self, ok):
+        scheme = self.view.url().scheme()
+        detail = {'file': 'Vista previa local del proyecto', 'http': 'HTTP sin cifrar', 'https': 'HTTPS; consulta los avisos de certificado'}.get(scheme, 'Explorador AURA')
+        self.status.setText(('Cargado · ' if ok else 'No se pudo cargar · ') + detail)
 
     def navigate(self):
         try:

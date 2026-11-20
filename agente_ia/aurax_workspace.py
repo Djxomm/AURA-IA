@@ -29,7 +29,7 @@ class AuraxWorkspace(QWidget):
   for column in (1,2,3):self.tree.hideColumn(column)
   self.tabs=QTabWidget();self.tabs.setTabsClosable(True);self.tabs.tabCloseRequested.connect(self.close_tab);split.addWidget(self.tree);split.addWidget(self.tabs);split.setSizes([150,420]);layout.addWidget(split,1)
   row=QHBoxLayout()
-  for text,kind in [('Verificar','check'),('Ejecutar','run'),('Compilar EXE','build'),('Crear instalador','installer')]:
+  for text,kind in [('Verificar','check'),('Ejecutar','run'),('Compilar','build'),('Crear instalador','installer')]:
    button=QPushButton(text);button.clicked.connect(lambda checked=False,kind=kind:self.run(kind));row.addWidget(button)
   stop=QPushButton('Detener');stop.clicked.connect(self.stop_process);row.addWidget(stop);layout.addLayout(row)
   self.console=QPlainTextEdit();self.console.setReadOnly(True);self.console.setMaximumBlockCount(1500);self.console.setMaximumHeight(175);self.console.setPlaceholderText('Consola de AURAX: aquí aparecen comandos, errores y resultados reales.');self.console.setFont(QFont('Consolas',10));self.console.setStyleSheet('font-family:Consolas;font-size:12px;');layout.addWidget(self.console)
@@ -59,7 +59,7 @@ class AuraxWorkspace(QWidget):
  def import_response(self):
   text=self.owner.last_answer or '';match=re.search(r'```([a-zA-Z0-9_+-]*)\s*\n(.*?)```',text,re.S)
   if not match:self.message('La última respuesta no contiene un bloque de código. Pídele a AURAX que lo genere.');return
-  suffix={'python':'.py','py':'.py','javascript':'.js','js':'.js','json':'.json','html':'.html','css':'.css','c':'.c','cpp':'.cpp'}.get(match.group(1).lower(),'.txt');name,ok=QInputDialog.getText(self,'AURAX · Revisar código IA','Archivo del proyecto para esta propuesta:',text='propuesta'+suffix)
+  suffix={'python':'.py','py':'.py','javascript':'.js','js':'.js','json':'.json','html':'.html','css':'.css','c':'.c','cpp':'.cpp','java':'.java','php':'.php','html5':'.html'}.get(match.group(1).lower(),'.txt');name,ok=QInputDialog.getText(self,'AURAX · Revisar código IA','Archivo del proyecto para esta propuesta:',text='propuesta'+suffix)
   if not ok or not name.strip():return
   try:
    target=self.workspace.resolve_safe_path(name.strip(),allow_write=True);before=target.read_text('utf-8-sig') if target.exists() else None;editor=self.open_editor(self.workspace.to_rel_posix(target),before or '',before)
@@ -102,9 +102,11 @@ class AuraxWorkspace(QWidget):
   self.attach_requested.emit(editor.path)
  def run(self,kind):
   editor=self.tabs.currentWidget()
-  if editor is None:self.message('Abre un archivo Python o un proyecto de instalador .iss.');return
+  if editor is None:self.message('Abre un archivo del proyecto para verificarlo, ejecutarlo o compilarlo.');return
   if self.owner.busy or self.owner.warming:self.message('Espera a que AURA termine su tarea.');return
   if self.process.state()!=QProcess.ProcessState.NotRunning:self.message('Ya hay un proceso activo.');return
+  if Path(editor.path).suffix.lower() in {'.js','.mjs','.cjs','.java','.php','.html','.htm'} and kind!='installer':
+   self.run_language(editor,kind);return
   if Path(editor.path).suffix.lower() in {'.cpp','.cc','.cxx','.c'} and kind!='installer':
    self.run_cpp(editor,kind);return
   if kind=='installer':
@@ -119,6 +121,24 @@ class AuraxWorkspace(QWidget):
   command=str(python)+' '+ ' '.join(args)
   if QMessageBox.question(self,'AURAX · Autorizar proceso','Se ejecutará en el proyecto seleccionado:\n\n'+command)!=QMessageBox.StandardButton.Yes:return
   env=QProcessEnvironment.systemEnvironment();env.insert('PYTHONUTF8','1');env.insert('PYTHONIOENCODING','utf-8');env.insert('PATH',str(python.parent)+os.pathsep+env.value('PATH'));self.process.setProcessEnvironment(env);self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(python),args);self.timeout.start(300000 if kind=='build' else 120000)
+ def run_language(self,editor,kind):
+  from .language_tools import language_plan,check_html
+  if editor.base is None or editor.document().isModified():
+   if not self.save_current():return
+  try:
+   target=self.workspace.resolve_safe_path(editor.path);plan=language_plan(self.runtime,self.workspace.root,target,kind)
+   if plan.program is None and not plan.preview:self.console.appendPlainText(check_html(target));return
+   if plan.program is not None and not plan.program.is_file():self.message('No se encontró la herramienta incluida para este lenguaje.');return
+   command=('Vista previa local de '+str(target)) if plan.preview else str(plan.program)+' '+' '.join(plan.arguments)
+   if QMessageBox.question(self,'AURAX · Revisar ejecución',command+'\n\n'+plan.note)!=QMessageBox.StandardButton.Yes:return
+   if plan.preview:
+    from .native_browser import BrowserWindow
+    from PySide6.QtCore import QUrl
+    from PySide6.QtWebEngineCore import QWebEngineSettings
+    preview=BrowserWindow(self.owner);preview.setWindowTitle('AURAX · Vista previa HTML5');preview.address.setText(str(target));preview.address.setReadOnly(True);preview.page.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls,False);preview.view.setUrl(QUrl.fromLocalFile(str(target)));preview.show();self.console.appendPlainText('Vista previa HTML5 abierta sin servidor web.');return
+   if plan.output_directory:plan.output_directory.mkdir(parents=True,exist_ok=True)
+   env=QProcessEnvironment.systemEnvironment();env.insert('PATH',str(plan.program.parent)+os.pathsep+env.value('PATH'));self.process.setProcessEnvironment(env);self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(plan.program),plan.arguments);self.timeout.start(300000 if kind=='build' else 120000)
+  except Exception as error:self.message(error)
  def run_cpp(self,editor,kind):
   if editor.base is None or editor.document().isModified():
    if not self.save_current():return
@@ -126,7 +146,7 @@ class AuraxWorkspace(QWidget):
   if not compiler.is_file():self.message('No se encontró el compilador C/C++ incluido.');return
   target=self.workspace.resolve_safe_path(editor.path);output=self.workspace.root/'dist'/(target.stem+'.exe')
   if kind=='run':
-   if not output.is_file():self.message('Primero pulsa Compilar EXE para este archivo C/C++.');return
+   if not output.is_file():self.message('Primero pulsa Compilar para generar el EXE de este archivo C/C++.');return
    program=output;args=[]
   else:
    program=compiler;args=['-std=c11' if target.suffix=='.c' else '-std=c++17','-Wall','-Wextra']

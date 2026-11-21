@@ -55,14 +55,22 @@ class NativeOutputFilter:
 class NativeClient:
  def __init__(self,runtime,data,model=None):
   self.runtime=Path(runtime).resolve();self.data=Path(data).resolve();self.data.mkdir(parents=True,exist_ok=True)
-  self.model=Path(model or self.runtime/'modelos/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf').resolve();self.process=None;self.cancelled=threading.Event();self.first_text=None;self.lock=threading.Lock();self.auto_context=True;self.effective_context=None
+  self.model=Path(model or self.runtime/'modelos/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf').resolve();self.process=None;self.cancelled=threading.Event();self.first_text=None;self.lock=threading.Lock();self.auto_context=True;self.effective_context=None;self.acceleration="auto";self.backend_note="CPU compatible"
  def stop(self):
   self.cancelled.set();p=self.process
   if p is not None and p.poll() is None:
    p.terminate()
  def generate(self,settings,messages,callback,use_cache=True):
-  with self.lock:return self._generate(settings,messages,callback,use_cache)
- def _generate(self,settings,messages,callback,use_cache):
+  with self.lock:
+   from .acceleration import backend
+   engine,gpu_args,self.backend_note=backend(self.runtime,self.data,self.acceleration)
+   try:return self._generate(settings,messages,callback,use_cache,engine,gpu_args)
+   except (ProviderError,OSError):
+    if not gpu_args or self.cancelled.is_set() or self.first_text is not None:raise
+    self.backend_note='GPU no disponible; continuando por CPU'
+    return self._generate(settings,messages,callback,use_cache,self.runtime/'motor',[])
+ def _generate(self,settings,messages,callback,use_cache,engine=None,gpu_args=None):
+  engine=engine or self.runtime/"motor";gpu_args=gpu_args or []
   self.cancelled.clear();self.first_text=None
   if not self.model.is_file():raise ProviderError('No se encontró el modelo GGUF.')
   # This lightweight transport supports the Qwen ChatML family explicitly.
@@ -75,12 +83,14 @@ class NativeClient:
   budget=min(budget,max(32,effective-len(prompt)//2-64))
   path=self.data/'turno.txt';path.write_bytes(prompt.encode('utf-8'));log=(self.data/'motor-nativo.log').open('a',encoding='utf-8');start=time.monotonic();answer=''
   batch=str(max(16,min(128,settings.num_batch)))
-  args=[str(self.runtime/'motor/llama-completion.exe'),'-m',str(self.model),'-c',str(effective),'-t',str(settings.num_thread),'-tb',str(settings.num_thread),'-b',batch,'-ub',batch,'-ngl','0','--poll','0','--no-warmup','-no-cnv','--simple-io','--no-display-prompt','--color','off','--no-perf','--temp',str(settings.temperature),'-n',str(budget),'--no-escape','-bf',str(path)]
-  cache_dir=self.data/'cache';cache_dir.mkdir(exist_ok=True);engine_signature=';'.join(f.name+':'+str(f.stat().st_mtime_ns)+':'+str(f.stat().st_size) for f in sorted((self.runtime/'motor').glob('*.dll')));cache_key=hashlib.sha256(('native-prompt-v2|'+engine_signature+str(self.model.resolve())+str(self.model.stat().st_mtime_ns)+str(effective)).encode()).hexdigest()[:20];cache=cache_dir/(cache_key+'.bin')
+  args=[str(engine/'llama-completion.exe'),'-m',str(self.model),'-c',str(effective),'-t',str(settings.num_thread),'-tb',str(settings.num_thread),'-b',batch,'-ub',batch,'-ngl','0','--poll','0','--no-warmup','-no-cnv','--simple-io','--no-display-prompt','--color','off','--no-perf','--temp',str(settings.temperature),'-n',str(budget),'--no-escape','-bf',str(path)]
+  if gpu_args:
+   args[args.index('-ngl')+1]=gpu_args[-1];args+=gpu_args[:2]
+  cache_dir=self.data/'cache';cache_dir.mkdir(exist_ok=True);engine_signature=';'.join(f.name+':'+str(f.stat().st_mtime_ns)+':'+str(f.stat().st_size) for f in sorted(engine.glob('*.dll')));cache_key=hashlib.sha256(('native-prompt-v3|'+str(engine)+str(gpu_args)+engine_signature+str(self.model.resolve())+str(self.model.stat().st_mtime_ns)+str(effective)).encode()).hexdigest()[:20];cache=cache_dir/(cache_key+'.bin')
   if use_cache:args+=['--prompt-cache',str(cache),'--prompt-cache-all']
   decoder=codecs.getincrementaldecoder('utf-8')('replace');output_filter=NativeOutputFilter()
   try:
-   self.process=subprocess.Popen(args,cwd=self.runtime/'motor',stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0)|getattr(subprocess,'BELOW_NORMAL_PRIORITY_CLASS',0))
+   self.process=subprocess.Popen(args,cwd=engine,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0)|getattr(subprocess,'BELOW_NORMAL_PRIORITY_CLASS',0))
    while True:
     b=self.process.stdout.read(1)
     if not b:break

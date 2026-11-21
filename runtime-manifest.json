@@ -22,5 +22,11 @@
   "vosk": {
     "url": "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip",
     "sha256": "09b239888f633ef2f0b4e09736e3d9936acfd810bc65d53fad45261762c6511f"
+  },
+  "vulkan": {
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12554/llama-b12554-bin-win-vulkan-x64.zip",
+    "sha256": "7ba80697e5683eec864e087ec09bcd5ef4d5900ee7862d9f18f236499de3c0bf",
+    "size": 38689920,
+    "note": "Optional isolated backend. CPU legacy files are not replaced. Driver compatibility is tested on use; no throughput guarantee."
   }
 }

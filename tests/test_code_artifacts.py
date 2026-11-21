@@ -70,3 +70,10 @@ def test_explicit_filename_is_preserved_in_recovered_proposal(tmp_path):
     assert path=='utilidades/total.py'
     name,args=code_proposal('```python\ndef sumar(a,b): return a+b\n```','python',SafeWorkspace(str(tmp_path)),preferred_path=path)
     assert name=='create_file' and args['path']==path
+
+
+def test_explicit_edit_request_uses_real_file_workflow():
+    from agente_ia.code_artifacts import file_task_requested
+    assert file_task_requested('Ajusta total.py para rechazar cantidades negativas')
+    assert file_task_requested('Corrige src/app.js: no abre la ventana')
+    assert not file_task_requested('Explícame cómo funciona total.py')

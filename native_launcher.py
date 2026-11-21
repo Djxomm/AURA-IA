@@ -72,7 +72,7 @@ class Window(QMainWindow):
   settings=self.store.get_settings()
   if not existing_database or not Path(settings.workspace_path).is_dir():self.store.save_settings(settings.model_copy(update={'workspace_path':str(projects),'tool_mode':'xml',**recommended_settings(hardware_info())}))
   self.memory=Memory(self.data/'memoria.db');self.skills=SkillStore(self.data/'skills');self.skills.install_defaults(ROOT/'skills');self.registry=ApprovalRegistry()
-  self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
+  self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.client.acceleration=self.prefs.get('acceleration','auto');self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
   self.setWindowTitle('AURA · Inteligencia Artificial — Escritorio');self.setWindowIcon(QIcon(str(ASSETS/'aura-icono-transparente.png')));self.resize(1180,760);self.setMinimumSize(760,540)
   build_shell(self,ASSETS)
@@ -91,9 +91,18 @@ class Window(QMainWindow):
   from agente_ia.native_browser import BrowserWindow
   browser=BrowserWindow(self);browser.setWindowIcon(self.windowIcon());browser.show()
  def open_aurax(self):
+  if not self.busy and not self.warming and not self.prefs.get('coder_profile_initialized',False):
+   from agente_ia.hardware_profile import hardware_info
+   machine=hardware_info()
+   if (machine.get('ram_gib') or 0)>=15 and machine.get('cores',1)>=4 and '1.5b' in self.client.model.name.lower():
+    candidates=[ROOT/'modelos/qwen2.5-coder-7b-instruct-q4_k_m.gguf']+[Path(p) for p in self.prefs.get('models',[]) if isinstance(p,str)]
+    selected=next((p for p in candidates if '7b-instruct-q4_k_m' in p.name.lower() and p.is_file() and p.stat().st_size==4683073536),None)
+    if selected:self.select_model(selected)
+   self.save_pref('coder_profile_initialized',True)
+
   if (ROOT/'skills/multilenguaje/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','multilenguaje')
   if self.aurax is None:
-   self.aurax=AuraxWorkspace(self,ROOT);self.aurax.attach_requested.connect(self.attach_aurax_file);self.aurax_dock=QDockWidget('AURAX · Espacio de programación',self);self.aurax_dock.setWidget(self.aurax);self.aurax_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea);compact=self.width()<self.centralWidget().minimumSizeHint().width()+self.aurax.minimumSizeHint().width()+12;previous=self.size();self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.aurax_dock)
+   self.aurax=AuraxWorkspace(self,ROOT);self.aurax.attach_requested.connect(self.attach_aurax_file);self.aurax_dock=QDockWidget('QbitX · Agente y herramientas',self);self.aurax_dock.setWidget(self.aurax);self.aurax_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea);compact=self.width()<self.centralWidget().minimumSizeHint().width()+self.aurax.minimumSizeHint().width()+12;previous=self.size();self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.aurax_dock)
    if compact:
     self.aurax_dock.setFloating(True);area=self.screen().availableGeometry();self.aurax_dock.resize(min(860,area.width()-40),min(620,area.height()-40));self.resize(previous)
   self.aurax_dock.show();self.aurax_dock.raise_()
@@ -163,7 +172,7 @@ class Window(QMainWindow):
   if self.warming:
    elapsed=str(round(time.monotonic()-self.started,1))+' s';self.status.setText('Preparando AURA · '+elapsed)
   if self.busy:
-   first=self.client.first_text;self.status.setText(('Generando' if first else 'Preparando modelo y contexto')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(first,2))+' s' if first else ''))
+   first=self.client.first_text;self.status.setText((getattr(self,'task_stage','Generando') if first else 'Preparando modelo y contexto')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(first,2))+' s' if first else ''))
  def send(self):
   text=self.input.toPlainText().strip()
   if self.busy or self.warming or not text:return
@@ -213,6 +222,9 @@ class Window(QMainWindow):
   elif kind=='agent':
    event,payload=data
    if event=='token':self.handle_event('token',payload.get('text',''))
+   elif event=='task_progress':
+    self.task_stage=payload.get('message','QbitX trabajando');self.status.setText(self.task_stage)
+    if self.aurax is not None:self.aurax.console.appendPlainText(payload.get('message','')+'\n'+ '\n'.join(payload.get('state',{}).get('steps',[])))
    elif event=='stream_clean':self.answer=payload.get('content','');self.items[-1]=('assistant',self.answer);self.drawn=len(self.answer);self.render()
    elif event=='proposal_resolved' and payload.get('status')=='applied':
     self.run_changes=getattr(self,'run_changes',0)+1

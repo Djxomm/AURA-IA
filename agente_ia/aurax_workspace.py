@@ -21,7 +21,7 @@ class AuraxWorkspace(QWidget):
  attach_requested=Signal(str)
  def __init__(self,owner,runtime):
   super().__init__();self.owner=owner;self.runtime=Path(runtime);self.workspace=SafeWorkspace(owner.store.get_settings().workspace_path);self.process=QProcess(self);self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels);self.process.readyReadStandardOutput.connect(self.read_output);self.process.finished.connect(self.finished);self.process.errorOccurred.connect(lambda error:self.console.appendPlainText('No se pudo ejecutar el proceso: '+self.process.errorString()));self.timeout=QTimer(self);self.timeout.setSingleShot(True);self.timeout.timeout.connect(self.stop_process);self.web_url=None;self.web_preview=None;self.web_preview_opened=False
-  layout=QVBoxLayout(self);layout.setContentsMargins(8,8,8,8);title=QLabel('AURAX');title.setFont(QFont('Segoe UI',15,QFont.Weight.Bold));titlebar=QHBoxLayout();titlebar.addWidget(title,1);import_code=QPushButton('Revisar respuesta');import_code.clicked.connect(self.import_response);titlebar.addWidget(import_code);layout.addLayout(titlebar);self.path_label=QLabel(str(self.workspace.root));self.path_label.setWordWrap(True);layout.addWidget(self.path_label)
+  layout=QVBoxLayout(self);layout.setContentsMargins(8,8,8,8);title=QLabel('QbitX · Proyecto y herramientas');title.setFont(QFont('Segoe UI',15,QFont.Weight.Bold));titlebar=QHBoxLayout();titlebar.addWidget(title,1);import_code=QPushButton('Revisar respuesta');import_code.clicked.connect(self.import_response);titlebar.addWidget(import_code);layout.addLayout(titlebar);self.path_label=QLabel(str(self.workspace.root));self.path_label.setWordWrap(True);layout.addWidget(self.path_label)
   toolbar=QToolBar();toolbar.setMovable(False);toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly);self.file_toolbar=toolbar
   for text,fn in [('Proyecto',owner.project),('Nuevo',self.new_menu),('Guardar',self.save_current),('Adjuntar a AURAX',self.attach),('Proyecto web',self.web_menu)]:
    toolbar.addAction(text,fn)
@@ -118,6 +118,7 @@ class AuraxWorkspace(QWidget):
   self.attach_requested.emit(editor.path)
  def run(self,kind):
   editor=self.tabs.currentWidget()
+  self.check_action=kind;self.check_path=editor.path if editor else "."
   if kind in {'check','run','build'}:
    try:
     from .framework_tools import find_web_project
@@ -253,7 +254,12 @@ class AuraxWorkspace(QWidget):
   from .native_browser import BrowserWindow
   from PySide6.QtCore import QUrl
   preview=BrowserWindow(self.owner);self.web_preview=preview;self.web_preview_opened=True;preview.destroyed.connect(lambda:setattr(self,'web_preview',None));preview.setWindowTitle('AURAX · Vista previa del proyecto web');preview.view.setUrl(QUrl(self.web_url));preview.show()
- def finished(self,code,status):self.timeout.stop();self.read_output();self.web_url=None;self.console.appendPlainText('Proceso terminado · código de salida: '+str(code))
+ def finished(self,code,status):
+  self.timeout.stop();self.read_output();self.web_url=None;self.console.appendPlainText('Proceso terminado · código de salida: '+str(code))
+  coordinator=getattr(getattr(self.owner,'engine',None),'coordinator',None)
+  if coordinator is not None and self.owner.sid:
+   coordinator.execution(self.owner.sid,str(self.workspace.root),getattr(self,'check_action','proceso'),getattr(self,'check_path','.'),code)
+
  def stop_process(self):
   self.web_url=None
   if self.web_preview is not None:self.web_preview.close();self.web_preview=None

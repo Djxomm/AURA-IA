@@ -24,6 +24,7 @@ class SettingsHub(QDialog):
         self.length=QSpinBox();self.length.setRange(0,4096);self.length.setSingleStep(128);self.length.setSpecialValueText('Automático');self.length.setValue(s.max_predict_tokens);form.addRow('Longitud máxima',self.length)
         self.context=QSlider(Qt.Orientation.Horizontal);self.context.setRange(2048,8192);self.context.setSingleStep(1024);self.context.setPageStep(1024);self.context.setValue(s.num_ctx);label=QLabel(str(s.num_ctx)+' tokens');self.context.valueChanged.connect(lambda value:label.setText(str(value)+' tokens'));self.context.valueChanged.connect(lambda value:self.context.setValue(round(value/1024)*1024));form.addRow('Contexto',self.context);form.addRow(label)
         self.automatic=QCheckBox('Ampliar el contexto cuando haga falta');self.automatic.setChecked(owner.client.auto_context);form.addRow(self.automatic)
+        self.accelerator=QComboBox();self.accelerator.addItem('Automática · CPU / GPU verificada','auto');self.accelerator.addItem('Solo procesador · i5 compatible','cpu');self.accelerator.addItem('Probar GPU Vulkan · Intel / NVIDIA','vulkan');self.accelerator.setCurrentIndex(max(0,self.accelerator.findData(getattr(owner.client,'acceleration','auto'))));form.addRow('Aceleración',self.accelerator)
         self.threads=QSpinBox();self.threads.setRange(1,64);self.threads.setValue(s.num_thread);form.addRow('Hilos del procesador',self.threads)
         self.temperature=QDoubleSpinBox();self.temperature.setRange(0,1.5);self.temperature.setSingleStep(.05);self.temperature.setValue(s.temperature);form.addRow('Creatividad',self.temperature)
         self.hardware=hardware_info();machine=QLabel(self.hardware['cpu']+'\n'+str(self.hardware['cores'])+' núcleos · '+str(self.hardware['ram_gib'])+' GiB RAM');machine.setWordWrap(True);form.addRow('Este equipo',machine);recommend=QPushButton('Usar valores recomendados para esta PC');recommend.clicked.connect(self.recommend);form.addRow(recommend)
@@ -45,5 +46,6 @@ class SettingsHub(QDialog):
 
     def apply(self):
         w=self.owner;s=w.store.get_settings();w.store.save_settings(s.model_copy(update={'thinking_effort':self.effort.currentData(),'max_predict_tokens':self.length.value(),'num_ctx':self.context.value(),'num_thread':self.threads.value(),'temperature':self.temperature.value(),'tool_mode':'xml','num_batch':64}))
+        w.client.acceleration=self.accelerator.currentData();w.save_pref("acceleration",w.client.acceleration)
         w.client.auto_context=self.automatic.isChecked();w.save_pref('auto_context',self.automatic.isChecked());w.save_pref('intro',self.intro.isChecked());w.save_pref('floating',self.floating.isChecked());w.save_pref('animations',self.motion.isChecked());w.auto_voice.setChecked(self.autovoice.isChecked());w.floating.setVisible(self.floating.isChecked());w.refresh_chat_controls();self.accept()
     def launch(self,callback):self.apply();callback()

@@ -339,7 +339,37 @@ class AgentEngine:
             removed_lines=diff["removed"],
         )
 
-    async def run_turn(
+    async def run_turn(self, **kwargs):
+        from .task_coordinator import TaskCoordinator
+        if not hasattr(self, 'coordinator'):
+            path = ':memory:' if self.storage.db_path == ':memory:' else str(Path(self.storage.db_path).with_name('qbitx-tasks.sqlite'))
+            self.coordinator = TaskCoordinator(path)
+        session = kwargs['session_id']
+        project = str(Path(kwargs['settings'].workspace_path).resolve())
+        state = self.coordinator.begin(session, project, kwargs['user_message'])
+        emitter = kwargs.get('emit')
+        async def progress(event, payload):
+            if event in ('proposal_resolved', 'tool_result', 'error'):
+                self.coordinator.event(session, project, state, event, payload)
+            await _emit(emitter, event, payload)
+        await _emit(emitter, 'task_progress', {'message': 'QbitX · Recuperando objetivo y revisando el proyecto', 'state': state})
+        kwargs['emit'] = progress
+        kwargs['_task_context'] = self.coordinator.context(state)
+        kwargs['_task_state'] = state
+        try:
+            result = await self._run_turn(**kwargs)
+            state['status'] = 'review_pending' if state['files'] and result.get('status') == 'done' else result.get('status', 'incomplete')
+            state['last_result'] = str(result.get('content') or result.get('error') or '')[:1400]
+            self.coordinator.save(session, project, state)
+            label={'review_pending':'Archivos guardados; revisión pendiente','done':'Turno terminado','incomplete':'Avance guardado; puedes continuar','error':'Requiere atención','cancelled':'Detenido por el usuario'}.get(state['status'],'Avance guardado')
+            await _emit(emitter, 'task_progress', {'message': 'QbitX · '+label, 'state': state})
+            return result
+        except BaseException:
+            state['status'] = 'interrupted'
+            self.coordinator.save(session, project, state)
+            raise
+
+    async def _run_turn(
         self,
         *,
         session_id: str,
@@ -350,6 +380,8 @@ class AgentEngine:
         approval_handler: ApprovalHandler | None = None,
         cancel_event: asyncio.Event | None = None,
         run_id: str | None = None,
+        _task_context: str = "",
+        _task_state: dict | None = None,
     ) -> dict[str, Any]:
         """Ejecuta un turno completo del agente con streaming, herramientas y aprobación de diffs."""
         try:
@@ -397,8 +429,23 @@ class AgentEngine:
         from .aura_api import effort_instruction
         system_prompt += "\n" + effort_instruction(settings)
         system_prompt += self.skills_store.manifest()
+        system_prompt += _task_context
+        if _task_context:
+            import re
+            inventory = workspace.list_files(path='.', max_depth=2, max_entries=25)
+            system_prompt += '\nArchivos reales del proyecto (lista acotada):\n'+inventory['text'][:1000]
+            candidates = re.findall(r'(?<![\w./-])([A-Za-z0-9_./-]+\.(?:py|js|mjs|html|css|json|cpp|java|php))\b', user_message)
+            for candidate in list(dict.fromkeys(candidates))[:2]:
+                try:
+                    info = workspace.read_file(candidate, start_line=1, end_line=60)
+                    system_prompt += '\nArchivo existente '+candidate+':\n'+info['numbered_excerpt'][:1600]
+                except WorkspaceError:
+                    pass
+
         if creating:
-            system_prompt += '\nEl usuario pide archivos reales. Respeta la última elección de lenguaje. No entregues solo ideas, ejemplos ni marcadores pendientes. Usa create_file/write_file con archivos completos; la interfaz pedirá aprobación. Nunca digas que ejecutaste o compilaste si no hubo una herramienta que lo hiciera. Para un juego HTML sencillo prefiere un index.html autocontenido.\nEspecificación vigente:\n'+brief
+            system_prompt += '\nEl usuario pide archivos reales. Respeta la última elección de lenguaje. No entregues solo ideas, ejemplos ni marcadores pendientes. Usa create_file/write_file con archivos completos; la interfaz pedirá aprobación. Nunca digas que ejecutaste o compilaste si no hubo una herramienta que lo hiciera. Para un juego HTML sencillo prefiere un index.html autocontenido.'
+            if brief.strip() != user_message.strip():
+                system_prompt += '\nEspecificación vigente:\n'+brief
             history = []
         conversation: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         for item in history:
@@ -411,6 +458,7 @@ class AgentEngine:
         )
         conversation.append({"role": "user", "content": prompt_for_model})
 
+        system_without_checkpoint = system_prompt.replace(_task_context, "") if _task_context else system_prompt
         total_tokens = 0
         total_elapsed_ms = 0
         last_tok_per_sec = 0.0
@@ -429,6 +477,10 @@ class AgentEngine:
                 await _emit(emit, "error", {"message": "Generación cancelada por el usuario."})
                 return {"status": "cancelled", "content": final_content}
 
+            from .task_coordinator import bounded_conversation, TaskCoordinator
+            if _task_state is not None:
+                conversation[0]["content"] = system_without_checkpoint + TaskCoordinator.context(_task_state)
+            conversation = bounded_conversation(conversation, max(1000, settings.num_ctx - 800))
             est_tokens = estimate_tokens(conversation)
             await _emit(
                 emit,
@@ -588,9 +640,9 @@ class AgentEngine:
                             workspace=workspace,
                             tc=tc,
                         )
-                        if creating and proposal.proposed_content is not None and proposal.action in ('create','write'):
+                        if proposal.proposed_content is not None and proposal.action in ('create','write','edit'):
                             try:
-                                validate_code(proposal.file_path, proposal.proposed_content, expected, getattr(self.llm_client, 'runtime', None))
+                                validate_code(proposal.file_path, proposal.proposed_content, expected if creating else None, getattr(self.llm_client, 'runtime', None))
                             except (ValueError, SyntaxError, OSError, subprocess.TimeoutExpired) as error:
                                 raise WorkspaceError(str(error)) from error
                     except WorkspaceError as exc:

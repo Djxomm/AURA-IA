@@ -6,6 +6,14 @@ Asistente de escritorio para **Windows 10 x64**, con programación local, memori
 
 La interfaz principal tiene una distribución de chat en azul oscuro, con navegación lateral compacta. Utiliza PySide6/Qt: no necesita un navegador externo ni inicia un servidor web para la interfaz. El explorador de Internet opcional se abre en una ventana integrada. El motor de texto se comunica por procesos locales y elige automáticamente bibliotecas compatibles con el procesador. Conserva las variantes CPU SSE4.2/x64 para equipos antiguos. El objetivo de desarrollo incluye un i5 de primera generación y 16 GB RAM; todavía falta probar ese equipo físico.
 
+## AURAX y QbitX (3.9)
+
+AURAX conserva objetivos y avances; QbitX reúne archivos y herramientas. Los checkpoints sobreviven al reinicio, se acota el contexto sin separar llamadas de sus resultados y las peticiones de ajuste de archivos entran en el flujo de cambios revisables. No se carga un segundo modelo para coordinar.
+
+Motor Vulkan opcional separado para Intel y NVIDIA, con recuperación por CPU antes de emitir texto si falla la GPU. En la Intel UHD probada, CPU fue más rápida con el modelo 1.5B; no se activa la GPU solo por existir. El perfil GTX 1060 6 GB está preparado pero no probado físicamente. Se conserva el motor CPU SSE4.2/x64.
+
+[Guía 3.9 y resultados de la comparación](docs/AURA-3.9.md). El instalador conserva el modelo ligero; un 7B completo ya instalado o registrado se prefiere para programación en equipos de al menos 15 GiB y cuatro núcleos, una vez al configurar ese perfil. Se puede cambiar desde el selector. No hay garantía de corrección del código ni de rendimiento en hardware no probado.
+
 ## AURAX · Codificador integrado
 
 Abre **AURAX · Codificador** en la barra lateral. Incluye explorador del proyecto, editor por pestañas con colores de código, archivos nuevos, guardado con revisión de diferencias y adjuntos al agente. La consola permite verificar y ejecutar Python y generar un EXE con PyInstaller, siempre con autorización.

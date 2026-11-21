@@ -28,6 +28,13 @@ def main():
    if name in allowed or (name.startswith('ggml-cpu-') and name.endswith('.dll')):
     with package.open(entry) as source,(motor/name).open('wb') as output:shutil.copyfileobj(source,output)
  if not (motor/'llama-completion.exe').exists():raise RuntimeError('Falta llama-completion.exe en el paquete oficial.')
+ if 'vulkan' in manifest:
+  gpu=manifest['vulkan'];archive=download(gpu['url'],downloads/'llama-vulkan.zip',gpu['sha256']);gpu_root=runtime/'motor-vulkan';gpu_root.mkdir(parents=True,exist_ok=True)
+  with zipfile.ZipFile(archive) as package:
+   for entry in package.infolist():
+    name=Path(entry.filename).name
+    if not entry.is_dir() and (Path(name).suffix.lower() in {'.dll','.exe','.txt'} or name.startswith('LICENSE')):
+     with package.open(entry) as source,(gpu_root/name).open('wb') as output:shutil.copyfileobj(source,output)
  speech=manifest['vosk'];archive=download(speech['url'],downloads/'vosk-es.zip',speech['sha256']);voice=runtime/'voz';voice.mkdir(parents=True,exist_ok=True)
  with zipfile.ZipFile(archive) as package:
   for entry in package.infolist():

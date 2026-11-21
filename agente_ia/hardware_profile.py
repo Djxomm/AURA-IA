@@ -1,4 +1,4 @@
-"""Lightweight Windows hardware recommendations; inference stays CPU-only."""
+"""Lightweight Windows CPU recommendations; optional GPU is selected separately."""
 import ctypes,os,platform
 from ctypes import wintypes
 
@@ -30,4 +30,4 @@ def hardware_info():
 
 def recommended_settings(info):
     memory=info.get('ram_gib') or 8
-    return {'num_thread':max(1,min(4,info.get('cores',1))),'num_ctx':4096 if memory>=15 else 2048,'num_batch':64,'max_predict_tokens':0}
+    return {'num_thread':max(1,min(6,info.get('cores',1))),'num_ctx':4096 if memory>=15 else 2048,'num_batch':64,'max_predict_tokens':0}

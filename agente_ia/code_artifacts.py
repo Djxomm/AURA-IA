@@ -103,6 +103,9 @@ def code_proposal(text, expected, workspace, runtime=None, preferred_path=None):
 
 
 def file_task_requested(text, history=()):
+    value=normalized(text)
+    if re.search(r'\b(ajusta|corrige|modifica|edita|arregla|actualiza)\b',value) and re.search(r'\b[\w./-]+\.(?:py|html?|m?js|css|json|cpp|java|php)\b',value):
+        return True
     if creation_request(text):
         return True
     followup = bool(re.match(r'(?i)^\s*(continua|sigue|compila|compilalo|hazlo|dale|ok entonces|que sea|cambialo)', normalized(text)))

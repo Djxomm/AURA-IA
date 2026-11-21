@@ -19,7 +19,7 @@ class TaskCoordinator:
         with self.lock:
             row = self.db.execute('SELECT project,state FROM qbitx_tasks WHERE session=?', (session,)).fetchone()
             previous = json.loads(row[1]) if row and row[0] == project else {}
-            resume = bool(re.match(r'(?i)^\s*(contin[uú]a|sigue|reanuda|ok|dale|corrige|ajusta)', request))
+            resume = bool(re.match(r'(?i)^\s*(contin[uú]a|sigue|reanuda|ok|dale|corrige|ajusta|compila|ejecuta|prueba|verifica|probamos|probemos)', request))
             state = {'objective': previous.get('objective', request[:2400]) if resume else request[:2400],
                      'request': request[:2400], 'status': 'working',
                      'files': previous.get('files', [])[-24:],

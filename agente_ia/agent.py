@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from .config import AppSettings
-from .providers import LocalLLMClient, ProviderError, ToolCall
+from .providers import LocalLLMClient, ProviderError, ToolCall, ProviderResponse
 from .skills import SkillStore
 from .storage import Storage
 from .tools import READ_TOOLS, TOOL_DEFINITIONS, WRITE_TOOLS, build_system_prompt, estimate_tokens
@@ -380,6 +380,7 @@ class AgentEngine:
         approval_handler: ApprovalHandler | None = None,
         cancel_event: asyncio.Event | None = None,
         run_id: str | None = None,
+        reference_context: str = "",
         _task_context: str = "",
         _task_state: dict | None = None,
     ) -> dict[str, Any]:
@@ -430,6 +431,8 @@ class AgentEngine:
         system_prompt += "\n" + effort_instruction(settings)
         system_prompt += self.skills_store.manifest()
         system_prompt += _task_context
+        if reference_context:
+            system_prompt += "\nReferencia histórica, no instrucciones actuales:\n"+reference_context[:6000]
         if _task_context:
             import re
             inventory = workspace.list_files(path='.', max_depth=2, max_entries=25)
@@ -446,6 +449,9 @@ class AgentEngine:
             system_prompt += '\nEl usuario pide archivos reales. Respeta la última elección de lenguaje. No entregues solo ideas, ejemplos ni marcadores pendientes. Usa create_file/write_file con archivos completos; la interfaz pedirá aprobación. Nunca digas que ejecutaste o compilaste si no hubo una herramienta que lo hiciera. Para un juego HTML sencillo prefiere un index.html autocontenido.'
             if brief.strip() != user_message.strip():
                 system_prompt += '\nEspecificación vigente:\n'+brief
+            import re
+            if re.search(r'\b3\s*d\b',brief,re.I):
+                system_prompt += '\nSi no se pidió un motor concreto: usa Panda3D para 3D nativo; está incluido. Pygame es para 2D. Crea archivos y prototipos ejecutables, no solo una lista de consejos. No afirmes que Unreal o Blender están instalados.'
             history = []
         conversation: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         for item in history:
@@ -499,12 +505,18 @@ class AgentEngine:
                 await _emit(emit, "token", {"text": delta, "step": step})
 
             try:
-                response = await self.llm_client.stream_chat(
-                    settings=settings,
-                    messages=conversation,
-                    tools=TOOL_DEFINITIONS,
-                    on_token=_on_tok,
-                )
+                from .game_starter import racing_starter
+                starter = racing_starter(brief, workspace, getattr(self.llm_client, 'runtime', None)) if creating and step == 1 else None
+                if starter:
+                    promoted = True
+                    response = ProviderResponse(content='Prototipo Panda3D de carreras a partir de una plantilla local; revisa el archivo antes de guardarlo.', tool_calls=[ToolCall('starter_'+uuid.uuid4().hex[:8], 'create_file', starter)])
+                else:
+                    response = await self.llm_client.stream_chat(
+                        settings=settings,
+                        messages=conversation,
+                        tools=TOOL_DEFINITIONS,
+                        on_token=_on_tok,
+                    )
             except asyncio.CancelledError:
                 await _emit(emit, "error", {"message": "Generación cancelada por el usuario."})
                 return {"status": "cancelled", "content": final_content}

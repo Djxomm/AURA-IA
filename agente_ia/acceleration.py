@@ -22,7 +22,7 @@ def devices(runtime):
         return []
 
 
-def backend(runtime, data, mode='auto'):
+def backend(runtime, data, mode='auto', model_bytes=0, block_count=0):
     root=Path(runtime)
     if mode=='cpu':
         return root/'motor', [], 'CPU compatible'
@@ -38,5 +38,8 @@ def backend(runtime, data, mode='auto'):
             pass
     if selected:
         layers='28' if 'NVIDIA' in selected[1] else '12'
+        if model_bytes and block_count:
+            budget=max(256,min(selected[2]*.72,selected[2]-1400))*1024**2
+            layers=str(max(1,min(int(layers),int(budget/(model_bytes/block_count)))))
         return root/'motor-vulkan', ['--device',selected[0],'-ngl',layers], selected[1]+' · Vulkan'
     return root/'motor', [], 'CPU compatible · GPU sin mejora verificada'

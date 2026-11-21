@@ -47,6 +47,7 @@ def pygame_arguments(project, target, kind):
         return [str(target)]
     data = game_manifest(root) or {}
     name = data.get('name', target.stem)
+    if isinstance(name,str): name = re.sub(r'\s+', '-', name.strip())
     if not isinstance(name, str) or not re.fullmatch(r'[\w-]{1,64}', name):
         raise ValueError('El nombre del juego debe tener de 1 a 64 letras, números, guiones o guiones bajos.')
     args = ['-m', 'PyInstaller', '--noconfirm', '--onefile', '--windowed', '--name', name, '--collect-binaries', 'pygame', '--collect-data', 'pygame', '--exclude-module', 'pygame.tests', '--exclude-module', 'pygame.examples']

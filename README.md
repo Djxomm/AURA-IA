@@ -200,3 +200,12 @@ El instalador incorpora Pygame 2.6.1 en el Python 3.13 incluido, junto con una r
 `aura-game.json` permite definir el nombre del EXE, icono y carpetas de recursos. Las rutas deben permanecer dentro del proyecto. La plantilla muestra cómo localizar recursos en ejecución normal y dentro del EXE. Otros juegos deben declarar sus recursos antes de compilar. Bibliotecas opcionales como NumPy se agregan por separado cuando hagan falta.
 
 Se probaron sintaxis, ejecución, Detener y generación del EXE. El EXE ejecutó una prueba gráfica aislada con SDL dummy: cargó recursos, dibujó texto y formas y procesó eventos simulados. Esto no prueba GPU, teclado físico ni audio de otro equipo. Las licencias y procedencia están en `licenses/pygame/`; conserva sus avisos y los de SDL y tus recursos al distribuir juegos.
+
+
+## AURA 3.10.0
+
+Soporte local de OpenAI gpt-oss-20b MXFP4 mediante Harmony (canales separados), manteniendo Qwen 1.5B como opción inicial para equipos antiguos. GPT-oss dio 391 en una prueba de 17×23 y generó una función Python válida. En el i5-10210U con 16 GB la prueba aritmética tardó 109 segundos hasta el primer texto: no se promete baja latencia con 20B.
+
+Órdenes explícitas de compilar, ejecutar y probar desde el chat usan herramientas reales. Se comprobaron EXE generados con C++ y Python. Hay extracción ZIP/TAR con límites, monitor de recursos y Windows Sandbox opcional que exige disponibilidad real. La ejecución normal no ofrece aislamiento del sistema operativo. La memoria de referencias de proyectos privados permanece fuera del repositorio y del instalador.
+
+Guía: [Instalación y cambios](docs/AURA-3.10.0.md). Los pesos de modelos no se guardan en Git; respeta las licencias de cada modelo. GPT-oss no es el servicio alojado ChatGPT.

@@ -1,4 +1,7 @@
-#define AppVersion "3.9.0"
+#define AppVersion "3.10.0"
+#ifndef ModelLibraryRoot
+#define ModelLibraryRoot "..\Modelos_AURA\OpenAI"
+#endif
 [Setup]
 AppId=AURA-IA-Nativa
 AppName=AURA Inteligencia Artificial
@@ -15,6 +18,9 @@ SetupIconFile=agente_ia\static\assets\aura.ico
 UninstallDisplayIcon={app}\AURA-Nativa.exe
 Compression=lzma2/fast
 SolidCompression=no
+DiskSpanning=yes
+DiskSliceSize=2000000000
+SlicesPerDisk=1
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
@@ -29,6 +35,8 @@ Source: "runtime\modelos\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"; DestDir: "{ap
 Source: "runtime\voz\*"; DestDir: "{app}\voz"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
 
 Source: "runtime\frameworks\npm-cache.zip"; DestDir: "{app}\frameworks"; Flags: ignoreversion nocompression
+
+Source: "{#ModelLibraryRoot}\gpt-oss-20b-MXFP4.gguf"; DestDir: "{app}\modelos"; Flags: ignoreversion nocompression
 
 [Icons]
 Name: "{group}\AURA"; Filename: "{app}\AURA-Nativa.exe"

@@ -43,5 +43,6 @@ def main():
   package.extractall(voice)
  shutil.copytree(ROOT/'licenses',runtime/'licencias',dirs_exist_ok=True)
  if (ROOT/'skills').is_dir():shutil.copytree(ROOT/'skills',runtime/'skills',dirs_exist_ok=True)
+ if (ROOT/'templates/games').is_dir():shutil.copytree(ROOT/'templates/games',runtime/'games',dirs_exist_ok=True)
  print('Runtime listo. Ejecuta: python native_launcher.py',flush=True)
 if __name__=='__main__':main()

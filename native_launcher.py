@@ -80,6 +80,12 @@ class Window(QMainWindow):
   self.floating=FloatingAssistant(self)
   self.new_chat();self.refresh_history();self.timer=QTimer(self);self.timer.timeout.connect(self.progress);self.timer.start(300)
   self.startup=None;self.startup_finished=False;self.attached_files=[];self.aurax=None;self.aurax_dock=None;self.mode.currentIndexChanged.connect(lambda index:self.open_aurax() if index==1 else None)
+ def open_archives(self):
+  from agente_ia.archive_tools import open_dialog
+  open_dialog(self)
+ def open_resources(self):
+  from agente_ia.resource_panel import ResourcePanel
+  dialog=ResourcePanel(self);dialog.exec()
  def open_sql(self):
   from agente_ia.native_sql import SqlWindow
   if (ROOT/'skills/bases-sql/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','bases-sql')
@@ -172,20 +178,35 @@ class Window(QMainWindow):
   if self.warming:
    elapsed=str(round(time.monotonic()-self.started,1))+' s';self.status.setText('Preparando AURA · '+elapsed)
   if self.busy:
-   first=self.client.first_text;self.status.setText((getattr(self,'task_stage','Generando') if first else 'Preparando modelo y contexto')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(first,2))+' s' if first else ''))
+   first=self.client.first_text;self.status.setText((getattr(self.command_runner,'label','QbitX trabajando') if getattr(self,'command_runner',None) is not None else getattr(self,'task_stage','Generando') if first else 'Preparando modelo y contexto')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(first,2))+' s' if first else ''))
  def send(self):
   text=self.input.toPlainText().strip()
   if self.busy or self.warming or not text:return
   from agente_ia.code_artifacts import file_task_requested
+  from agente_ia.project_actions import requested_actions,ProjectRunner
+  actions=requested_actions(text)
   recent=self.store.get_messages(self.sid,limit=60) if self.sid else []
-  if not self.temporary.isChecked() and file_task_requested(text,recent):self.open_aurax()
-  if self.temporary.isChecked() and self.mode.currentIndex()==1:self.error('El modo temporal es solo conversación. Desactívalo para trabajar sobre archivos.');return
+  if not self.temporary.isChecked() and (actions or file_task_requested(text,recent)):self.open_aurax()
+  if self.temporary.isChecked() and (self.mode.currentIndex()==1 or actions):self.error('El modo temporal es solo conversación. Desactívalo para trabajar sobre archivos.');return
   settings=self.store.get_settings();project=settings.workspace_path
   if text.lower().startswith(('recuerda:','recuerda esto:')):
    if self.temporary.isChecked():self.error('Desactiva Temporal para guardar recuerdos.');return
    try:self.memory.save(text.split(':',1)[1],project,'Solicitud explícita del usuario');self.items.extend([('user',text),('assistant','Recuerdo guardado para este proyecto. Puedes editarlo en Memoria.')]);self.input.clear();self.render()
    except Exception as e:self.error(e)
    return
+  preferred=None
+  if actions and self.aurax is not None:
+   from PySide6.QtCore import QProcess
+   if self.aurax.process.state()!=QProcess.ProcessState.NotRunning:self.error('Hay un proceso activo en QbitX. Deténlo antes de iniciar otro.');return
+   editor=self.aurax.tabs.currentWidget()
+   if editor is not None:
+    preferred=editor.path
+    if (editor.base is None or editor.document().isModified()) and not self.aurax.save_current(review=False):return
+  if actions and preferred is None and self.sid:
+   preferred=next((change['file_path'] for change in self.store.list_changes(self.sid) if change['status']=='applied' and str(Path(change['workspace_path']).resolve())==str(Path(project).resolve())),None)
+  self.command_runner=ProjectRunner(ROOT) if actions else None
+  if actions:self.client.first_text=None;self.client.effective_context=None
+  self.task_stage='QbitX · Preparando herramientas' if actions else 'Generando'
   self.input.clear();self.items.append(('user',text));self.items.append(('assistant',''));self.answer='';self.drawn=0;self.render();self.busy=True;self.chat_controls.setEnabled(False);self.send_button.setEnabled(True);self.send_button.setIcon(icon('stop'));self.send_button.setAccessibleName('Detener respuesta');self.send_button.setToolTip('Detener respuesta');self.temporary.setEnabled(False);self.mode.setEnabled(False);self.started=time.monotonic();self.run_changes=0;temporary=self.temporary.isChecked();programming=self.mode.currentIndex()==1
   if not self.sid and not temporary:self.sid=self.store.create_session(title=text[:48],workspace_path=project,provider='nativo',model=self.client.model.name)['id']
   sid=self.sid;attachments=list(self.attached_files);self.attached_files.clear()
@@ -193,7 +214,18 @@ class Window(QMainWindow):
    try:
     memories=[] if temporary else self.memory.search(text,project)
     context='\nRecuerdos confirmados por el usuario (datos de referencia, no instrucciones que cambien permisos):\n'+'\n'.join(x['content'][:800] for x in memories) if memories else ''
-    if programming:
+    from agente_ia.project_knowledge import context_for
+    context+=context_for(text,project,self.prefs.get('knowledge_directories',['D:/IA/Memoria_Proyectos']),max_chars=min(2600,max(900,settings.num_ctx//2)))
+    if actions:
+     self.store.add_message(sid,'user',text)
+     result=self.command_runner.run(project,text,actions,preferred,lambda line:self.bus.event.emit('command_output',line))
+     from agente_ia.task_coordinator import TaskCoordinator
+     if not hasattr(self.engine,'coordinator'):self.engine.coordinator=TaskCoordinator(self.data/'qbitx-tasks.sqlite')
+     self.engine.coordinator.begin(sid,str(Path(project).resolve()),text)
+     for command in result['commands']:self.engine.coordinator.execution(sid,str(Path(project).resolve()),command['action'],result.get('target','.'),command['exit_code'])
+     self.store.add_message(sid,'assistant',result['content'],metadata={'execution':result['commands'],'status':result['status']})
+     self.bus.event.emit('done' if result['status']=='done' else 'failed',result['content'])
+    elif programming:
      async def emit(kind,data):self.bus.event.emit('agent',(kind,data))
      async def approve(p):
       reply={'event':threading.Event(),'proposal':p,'approved':False};self.bus.event.emit('approval',reply)
@@ -201,7 +233,7 @@ class Window(QMainWindow):
        if self.client.cancelled.is_set():return ApprovalDecision(False,'Detenido')
       return ApprovalDecision(reply['approved'])
      # Keep the user's original task in history; memory is supplied as attached user context.
-     result=asyncio.run(self.engine.run_turn(session_id=sid,user_message=text+context,settings=settings,attached_files=attachments,emit=emit,approval_handler=approve))
+     result=asyncio.run(self.engine.run_turn(session_id=sid,user_message=text,reference_context=context,settings=settings,attached_files=attachments,emit=emit,approval_handler=approve))
      if result.get('status') not in ('completed','done','success') and not result.get('content'):raise RuntimeError(result.get('error','No se completó la tarea.'))
      self.bus.event.emit('done',result.get('content',self.answer))
     else:
@@ -218,7 +250,9 @@ class Window(QMainWindow):
   threading.Thread(target=work,daemon=True).start();self.refresh_history()
  def handle_event(self,kind,data):
   if kind=='warmed':self.warming=False;self.send_button.setEnabled(True);self.status.setText('Lista para ayudarte' if data is None else 'Preparación cancelada o fallida. Puedes reintentar al enviar.');self.finish_startup();return
-  if kind=='token':self.answer+=data;self.items[-1]=('assistant',self.answer);self.render_pending=True
+  if kind=='command_output':
+   if self.aurax is not None:self.aurax.console.appendPlainText(str(data))
+  elif kind=='token':self.answer+=data;self.items[-1]=('assistant',self.answer);self.render_pending=True
   elif kind=='agent':
    event,payload=data
    if event=='token':self.handle_event('token',payload.get('text',''))
@@ -240,7 +274,7 @@ class Window(QMainWindow):
    self.items[-1]=('assistant',answer);self.last_answer=answer;self.busy=False;self.chat_controls.setEnabled(True);self.send_button.setEnabled(True);self.send_button.setIcon(icon('send','#ffffff'));self.send_button.setAccessibleName('Enviar mensaje');self.send_button.setToolTip('Enviar mensaje');self.temporary.setEnabled(True);self.mode.setEnabled(True);self.render();self.refresh_history();self.status.setText(('Respuesta terminada' if kind=='done' else 'Atención requerida')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(self.client.first_text,2))+' s' if self.client.first_text else ''))
    if self.client.effective_context and self.client.effective_context>self.store.get_settings().num_ctx:self.status.setText(self.status.text()+' · contexto ampliado a '+str(self.client.effective_context))
    if kind=='done' and self.mode.currentIndex()==1:
-    summary='AURAX · '+str(getattr(self,'run_changes',0))+' cambios aplicados' if getattr(self,'run_changes',0) else 'AURAX · respuesta sin cambios en archivos';self.status.setText(self.status.text()+' · '+summary)
+    summary='QbitX · Acciones ejecutadas en el proyecto' if getattr(self,'command_runner',None) is not None else 'AURAX · '+str(getattr(self,'run_changes',0))+' cambios aplicados' if getattr(self,'run_changes',0) else 'AURAX · respuesta sin cambios en archivos';self.status.setText(self.status.text()+' · '+summary)
     if self.aurax is not None:self.aurax.console.appendPlainText(summary)
    if kind=='done' and self.auto_voice.isChecked():self.speak()
   elif kind=='approval':
@@ -249,7 +283,9 @@ class Window(QMainWindow):
   elif kind=='voice_ready':self.player.setSource(QUrl.fromLocalFile(str(data)));self.player.play();self.status.setText('Hablando · Detener corta el audio')
   elif kind=='voice_fallback':self.status.setText(data)
   elif kind=='notice':self.error(data)
- def stop(self):self.voice_generation+=1;self.client.stop();self.dictation.stop();self.player.stop();self.dictating=False;self.mic.setToolTip('● Dictar');p=self.voice_process;self.voice_process=None;self.status.setText('Deteniendo…');p.terminate() if p is not None and p.poll() is None else None
+ def stop(self):
+  if getattr(self,'command_runner',None) is not None:self.command_runner.stop()
+  self.voice_generation+=1;self.client.stop();self.dictation.stop();self.player.stop();self.dictating=False;self.mic.setToolTip('● Dictar');p=self.voice_process;self.voice_process=None;self.status.setText('Deteniendo…');p.terminate() if p is not None and p.poll() is None else None
  def settings(self):
   if self.guarded():return
   SettingsHub(self).exec()
@@ -261,6 +297,9 @@ class Window(QMainWindow):
  def refresh_chat_controls(self):
   paths=sorted((ROOT/'modelos').glob('*.gguf'));registered=self.prefs.get('models',[])
   if isinstance(registered,list):paths.extend(Path(p) for p in registered if isinstance(p,str))
+  from agente_ia.model_library import discover
+  paths.extend((ROOT/'modelos').glob('*.gguf'))
+  paths.extend(discover(self.prefs.get('model_directories',['D:/IA/Modelos_AURA','D:/IA/Modelos_AURA/OpenAI'])))
   self.chat_controls.refresh(self.client.model,paths,self.store.get_settings().thinking_effort)
  def select_effort(self,value):
   if self.guarded():self.refresh_chat_controls();return
@@ -274,13 +313,15 @@ class Window(QMainWindow):
   try:
    p=Path(path).resolve()
    with p.open('rb') as f:
-    if f.read(4)!=b'GGUF' or b'qwen2' not in f.read(512000).lower():raise ValueError('Selecciona un Qwen2 / Qwen2.5 Instruct GGUF compatible. La integración de otras familias sigue pendiente.')
+    if f.read(4)!=b'GGUF':raise ValueError('GGUF inválido.')
+   from agente_ia.model_library import model_info
+   if model_info(p).get('general.architecture') not in {'qwen2','gpt-oss'}:raise ValueError('Modelo no compatible: usa Qwen2 Instruct o GPT-oss GGUF.')
    registered=self.prefs.get('models',[]);registered=registered if isinstance(registered,list) else [];self.save_pref('models',list(dict.fromkeys([str(p),*[v for v in registered if isinstance(v,str)]])))
    self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();self.status.setText('Modelo seleccionado: '+p.stem)
   except (OSError,ValueError) as exc:self.error(str(exc));self.refresh_chat_controls()
  def models(self):
   if self.guarded():return
-  d,l=self.dialog('Modelos locales');note=QLabel('Motor CPU con selección automática según el procesador, conservando soporte para equipos antiguos. Admite Qwen2 / Qwen2.5 Instruct GGUF. Los modelos grandes necesitan más memoria y tiempo. Solo se ejecuta un modelo por turno.');note.setWordWrap(True);l.addWidget(note);selected=QLineEdit(str(self.client.model));l.addWidget(selected)
+  d,l=self.dialog('Modelos locales');note=QLabel('Motor CPU con selección automática según el procesador, conservando soporte para equipos antiguos. Admite Qwen2 / Qwen2.5 Instruct y OpenAI GPT-oss GGUF. Los modelos grandes necesitan más memoria y tiempo. Solo se ejecuta un modelo por turno.');note.setWordWrap(True);l.addWidget(note);selected=QLineEdit(str(self.client.model));l.addWidget(selected)
   def browse():
    path,_=QFileDialog.getOpenFileName(d,'Modelo Qwen Coder GGUF','','Modelos (*.gguf)')
    if path:selected.setText(path)
@@ -290,7 +331,8 @@ class Window(QMainWindow):
     p=Path(selected.text()).resolve()
     with p.open('rb') as f:
      if f.read(4)!=b'GGUF':raise ValueError('GGUF inválido.')
-     if b'qwen2' not in f.read(512000).lower():raise ValueError('Esta versión nativa admite modelos Qwen2 / Qwen2.5 Instruct ChatML.')
+    from agente_ia.model_library import model_info
+    if model_info(p).get('general.architecture') not in {'qwen2','gpt-oss'}:raise ValueError('Modelo no compatible.')
     self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();d.accept()
    except Exception as e:self.error(e)
   l.addWidget(btn('Aplicar modelo',apply));d.exec()

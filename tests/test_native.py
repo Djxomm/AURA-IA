@@ -35,7 +35,7 @@ def test_native_context_auto_expands_and_manual_limit_is_respected(tmp_path,monk
  from agente_ia.native_core import NativeClient
  from agente_ia.config import AppSettings
  from agente_ia.providers import ProviderError
- model=tmp_path/'qwen.gguf';model.write_bytes(b'GGUF');calls=[]
+ model=tmp_path/'qwen.gguf';model.write_bytes(b'GGUF'+__import__('struct').pack('<IQQ',3,0,0));calls=[]
  class Process:
   def __init__(self,args,**kwargs):calls.append(args);self.stdout=io.BytesIO(b'Listo')
   def poll(self):return 0
@@ -64,7 +64,7 @@ def test_native_prompt_bytes_preserve_generation_prefix_and_literal_code(tmp_pat
  import io
  from agente_ia.native_core import NativeClient
  from agente_ia.config import AppSettings
- model=tmp_path/'qwen.gguf';model.write_bytes(b'GGUF');seen=[]
+ model=tmp_path/'qwen.gguf';model.write_bytes(b'GGUF'+__import__('struct').pack('<IQQ',3,0,0));seen=[]
  class Process:
   def __init__(self,args,**kwargs):
    assert '-bf' in args and '--no-escape' in args and '-f' not in args
@@ -85,7 +85,7 @@ def test_native_cache_changes_when_cpu_engine_changes(tmp_path,monkeypatch):
  import io
  from agente_ia.native_core import NativeClient
  from agente_ia.config import AppSettings
- model=tmp_path/'qwen.gguf';model.write_bytes(b'GGUF');(tmp_path/'motor').mkdir();seen=[]
+ model=tmp_path/'qwen.gguf';model.write_bytes(b'GGUF'+__import__('struct').pack('<IQQ',3,0,0));(tmp_path/'motor').mkdir();seen=[]
  class Process:
   def __init__(self,args,**kwargs):seen.append(args[args.index('--prompt-cache')+1]);self.stdout=io.BytesIO(b'Listo')
   def poll(self):return 0

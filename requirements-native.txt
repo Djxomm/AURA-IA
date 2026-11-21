@@ -9,3 +9,5 @@ PyMySQL==1.2.4
 pyodbc==5.5.0
 oracledb==26.1.0
 sqlparse==0.6.1
+
+psutil>=7,<9

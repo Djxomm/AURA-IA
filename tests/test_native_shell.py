@@ -22,7 +22,7 @@ class ShellOwner(QMainWindow):
  def save_pref(self,key,value):self.prefs[key]=value
  def refresh_chat_controls(self):self.chat_controls.refresh(self.client.model,[self.client.model],self.store.get_settings().thinking_effort)
 
-for method in ['new_chat','project','open_aurax','open_sql','open_browser','skills_panel','terminal','changes','settings','voice_settings','memory_panel','filter_history','select_chat','select_model','browse_chat_model','select_effort','attach_chat_files','toggle_dictation','stop','send','speak','clear_cache']:
+for method in ['new_chat','project','open_aurax','open_resources','open_archives','open_sql','open_browser','skills_panel','terminal','changes','settings','voice_settings','memory_panel','filter_history','select_chat','select_model','browse_chat_model','select_effort','attach_chat_files','toggle_dictation','stop','send','speak','clear_cache']:
  setattr(ShellOwner,method,lambda self,*args,name=method:self.calls.append(name))
 
 def app():

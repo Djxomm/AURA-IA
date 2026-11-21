@@ -9,9 +9,15 @@ LEVELS={'rapido':'Rápido','equilibrado':'Equilibrado','profundo':'Profundo'}
 
 def model_label(path):
     name=Path(path).stem
+    if "gpt-oss-20b" in name.lower():return "OpenAI gpt-oss · 20B · Experimental"
     if 'qwen2.5-coder-1.5b-instruct' in name.lower():return 'AURA Ligero · 1.5B'
     if 'qwen2.5-coder-7b-instruct' in name.lower():
         quant=re.search(r'q[2-8]',name.lower());return 'Qwen Coder · 7B'+(' · '+quant[0].upper() if quant else '')
+    match=re.search(r'qwen(2(?:\.5)?)(-coder)?-([0-9._]+b)-instruct',name.lower())
+    if match:
+        label='Qwen'+match[1]+(' Coder' if match[2] else '')+' · '+match[3].replace('_','.').upper()+' · Q4'
+        if match[3] in {'32b','72b'}:label+=' · Experimental'
+        return label
     return name[:48]
 
 class MenuButton(QToolButton):

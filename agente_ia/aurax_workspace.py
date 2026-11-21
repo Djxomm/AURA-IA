@@ -92,7 +92,7 @@ class AuraxWorkspace(QWidget):
   except Exception as exc:self.message(exc)
  def review(self,path,diff):
   dialog=QDialog(self);dialog.setWindowTitle('AURAX · Revisar '+path);dialog.resize(760,520);layout=QVBoxLayout(dialog);text=QPlainTextEdit(diff);text.setReadOnly(True);layout.addWidget(text);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Save|QDialogButtonBox.StandardButton.Cancel);buttons.accepted.connect(dialog.accept);buttons.rejected.connect(dialog.reject);layout.addWidget(buttons);return dialog.exec()==QDialog.DialogCode.Accepted
- def save_current(self):
+ def save_current(self,checked=False,*,review=True):
   editor=self.tabs.currentWidget()
   if editor is None:return False
   if self.owner.busy:self.message('Espera al agente antes de guardar cambios manuales.');return False
@@ -100,7 +100,7 @@ class AuraxWorkspace(QWidget):
    content=editor.toPlainText();before,after,base,diff=self.workspace.prepare_write(editor.path,content)
    if base!=compute_file_hash(editor.base):raise ValueError('El archivo cambió en disco. Cierra y vuelve a abrir la pestaña para revisar la versión nueva.')
    if before==after and before is not None:return True
-   if not self.review(editor.path,diff['unified_diff']):return False
+   if review and not self.review(editor.path,diff['unified_diff']):return False
    action='create' if before is None else 'write';self.workspace.apply_change(editor.path,action,after,base)
    if not self.owner.sid:self.owner.sid=self.owner.store.create_session(title='AURAX · '+editor.path,workspace_path=str(self.workspace.root),provider='nativo',model=self.owner.client.model.name)['id']
    self.owner.store.add_change_record(change_id=uuid.uuid4().hex,session_id=self.owner.sid,workspace_path=str(self.workspace.root),file_path=editor.path,action=action,reason='Edición manual revisada en AURAX',before_content=before,after_content=after,unified_diff=diff['unified_diff'],added_lines=diff['added'],removed_lines=diff['removed'],status='applied')

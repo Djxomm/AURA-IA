@@ -1,4 +1,4 @@
-#define AppVersion "3.8.0"
+#define AppVersion "3.8.1"
 [Setup]
 AppId=AURA-IA-Nativa
 AppName=AURA Inteligencia Artificial

@@ -50,7 +50,7 @@ def build_shell(w,assets):
     w.mode=QComboBox();w.mode.addItems(['Conversación','AURAX · Programación']);w.mode.setMaximumWidth(195);top.addWidget(w.mode);w.temporary=QCheckBox('Temporal');w.temporary.setToolTip('Sin historial ni memoria.');top.addWidget(w.temporary);rl.addLayout(top)
     w.status=QLabel('Preparando AURA…');w.status.setObjectName('status');w.status.setWordWrap(True);rl.addWidget(w.status)
     w.chat=ChatView();w.chat.setObjectName('conversation');w.chat.setMaximumWidth(820);chat_row=QHBoxLayout();chat_row.addStretch(1);chat_row.addWidget(w.chat,10);chat_row.addStretch(1);rl.addLayout(chat_row,1)
-    composer=QWidget();composer.setObjectName('composer');composer.setMaximumWidth(720);cl=QVBoxLayout(composer);cl.setContentsMargins(6,4,6,4);cl.setSpacing(0)
+    composer=QWidget();composer.setObjectName('composer');composer.setMaximumWidth(620);cl=QVBoxLayout(composer);cl.setContentsMargins(6,2,6,2);cl.setSpacing(0)
     w.input=MessageInput();w.input.setPlaceholderText('Escribe a AURA…');w.input.submit_requested.connect(w.send);cl.addWidget(w.input)
     row=QHBoxLayout();row.setSpacing(4);row.addWidget(tool(w,'plus','Adjuntar archivos del proyecto',w.attach_chat_files))
     w.chat_controls=ChatControls(w);w.chat_controls.model_requested.connect(w.select_model);w.chat_controls.browse_requested.connect(w.browse_chat_model);w.chat_controls.effort_requested.connect(w.select_effort);w.chat_controls.settings_requested.connect(w.settings);row.addWidget(w.chat_controls,1);w.refresh_chat_controls()

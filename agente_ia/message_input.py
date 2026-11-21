@@ -7,14 +7,14 @@ from PySide6.QtGui import QPalette,QColor
 class MessageInput(QPlainTextEdit):
     submit_requested=Signal()
     def __init__(self,parent=None):
-        super().__init__(parent);self.composing=False;self.setMinimumHeight(30);self.setMaximumHeight(120);self.setFixedHeight(30);self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        super().__init__(parent);self.composing=False;self.setMinimumHeight(26);self.setMaximumHeight(96);self.setFixedHeight(26);self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.textChanged.connect(self.fit_text);self.document().documentLayout().documentSizeChanged.connect(lambda size:self.fit_text())
         palette=self.palette();palette.setColor(QPalette.ColorRole.PlaceholderText,QColor('#8fa6bf'));self.setPalette(palette)
         self.setToolTip('Enter: enviar · Shift + Enter: nueva línea')
     def fit_text(self):
         line_count=max(1,math.ceil(self.document().documentLayout().documentSize().height()))
-        height=min(120,max(30,line_count*self.fontMetrics().lineSpacing()+12))
-        self.setFixedHeight(height);self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded if height>=120 else Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        height=min(96,max(26,line_count*self.fontMetrics().lineSpacing()+8))
+        self.setFixedHeight(height);self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded if height>=96 else Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     def resizeEvent(self,event):super().resizeEvent(event);QTimer.singleShot(0,self.fit_text)
     def inputMethodEvent(self,event):self.composing=bool(event.preeditString());super().inputMethodEvent(event)
     def keyPressEvent(self,event):

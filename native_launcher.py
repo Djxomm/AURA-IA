@@ -39,7 +39,7 @@ QWidget#sidebar QLineEdit{background:#0d1b2d;border:1px solid #24354d;}
 QLabel#chatTitle{font-size:16px;font-weight:600;}
 QLabel#status{color:#9cb3cf;font-size:12px;}
 QTextBrowser#conversation{background:#0b1424;border:none;font-size:15px;padding:18px 22px;}
-QWidget#composer{background:#142238;border:1px solid #2a3d58;border-radius:16px;}
+QWidget#composer{background:#142238;border:1px solid #2a3d58;border-radius:10px;}
 QWidget#composer QPlainTextEdit{background:transparent;border:none;font-size:14px;padding:2px 8px;}
 QWidget#composer QPushButton{background:transparent;border:none;padding:7px 10px;}
 QWidget#composer QPushButton:hover{background:#213b59;}

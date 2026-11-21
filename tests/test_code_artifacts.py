@@ -62,3 +62,11 @@ def test_windows_output_does_not_duplicate_carriage_returns():
     output=NativeOutputFilter()
     actual=''.join(output.feed(chunk) for chunk in ['hola\r','\r\n','mundo\r\r\r\n'])+output.finish()
     assert actual=='hola\nmundo\n'
+
+
+def test_explicit_filename_is_preserved_in_recovered_proposal(tmp_path):
+    from agente_ia.code_artifacts import requested_code_path
+    path=requested_code_path('Crea utilidades/total.py con una función de suma.','python')
+    assert path=='utilidades/total.py'
+    name,args=code_proposal('```python\ndef sumar(a,b): return a+b\n```','python',SafeWorkspace(str(tmp_path)),preferred_path=path)
+    assert name=='create_file' and args['path']==path

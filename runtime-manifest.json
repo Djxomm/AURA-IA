@@ -8,10 +8,12 @@
     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12554/llama-b12554-bin-win-cpu-x64.zip",
     "sha256": "fa855d6e2e4ba5c080c54a60689f57c1d7c93634613a065bbb8b7de4fa315c72",
     "cpu_backends": [
+      "auto",
       "sse42",
       "x64"
     ],
-    "gpu_layers": 0
+    "gpu_layers": 0,
+    "compatibility": "Keep all official CPU variants. Runtime chooses supported instructions; x64 and SSE4.2 remain available for old CPUs."
   },
   "python": {
     "url": "https://www.python.org/ftp/python/3.13.9/python-3.13.9-embed-amd64.zip"

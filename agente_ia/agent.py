@@ -358,7 +358,7 @@ class AgentEngine:
             await _emit(emit, "error", {"message": str(exc)})
             return {"status": "error", "error": str(exc)}
 
-        from .code_artifacts import file_task_requested, task_brief, expected_language, code_proposal, validate_code
+        from .code_artifacts import file_task_requested, task_brief, expected_language, code_proposal, validate_code, requested_code_path
         task_history = self.storage.get_messages(session_id, limit=60)
         creating = file_task_requested(user_message, task_history)
         brief = task_brief(task_history, user_message) if creating else ''
@@ -472,7 +472,7 @@ class AgentEngine:
 
             if creating and not response.tool_calls and not applied_paths and not declined:
                 try:
-                    name, arguments = code_proposal(response.content, expected, workspace, getattr(self.llm_client, 'runtime', None))
+                    name, arguments = code_proposal(response.content, expected, workspace, getattr(self.llm_client, 'runtime', None), requested_code_path(brief, expected))
                     promoted = True
                     response.tool_calls = [ToolCall(id='artifact_'+uuid.uuid4().hex[:10], name=name, arguments=arguments)]
                     await _emit(emit, 'stream_clean', {'content':'Preparando el archivo completo para tu revisión.', 'step':step})

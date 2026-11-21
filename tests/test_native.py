@@ -59,3 +59,40 @@ def test_native_tool_history_is_adapted(tmp_path):
  asyncio.run(c.stream_chat(AppSettings(),messages,[],None))
  assert '<tool_call>' in captured[1]['content']
  assert captured[2]['role']=='user' and 'print(1)' in captured[2]['content']
+
+def test_native_prompt_bytes_preserve_generation_prefix_and_literal_code(tmp_path,monkeypatch):
+ import io
+ from agente_ia.native_core import NativeClient
+ from agente_ia.config import AppSettings
+ model=tmp_path/'qwen.gguf';model.write_bytes(b'GGUF');seen=[]
+ class Process:
+  def __init__(self,args,**kwargs):
+   assert '-bf' in args and '--no-escape' in args and '-f' not in args
+   assert __import__('pathlib').Path(args[args.index('-m')+1]).is_absolute()
+   seen.append(__import__('pathlib').Path(args[args.index('-bf')+1]).read_bytes())
+   self.stdout=io.BytesIO(b'Listo')
+  def poll(self):return 0
+  def wait(self,**kwargs):return 0
+ monkeypatch.setattr('agente_ia.native_core.subprocess.Popen',Process)
+ c=NativeClient(tmp_path,tmp_path/'state',model)
+ c.generate(AppSettings(),[{'role':'user','content':r"print('a\nb')"}],lambda x:None)
+ assert seen[0].endswith(b'<|im_start|>assistant\n')
+ assert b'\r' not in seen[0]
+ assert br"print('a\nb')" in seen[0]
+
+
+def test_native_cache_changes_when_cpu_engine_changes(tmp_path,monkeypatch):
+ import io
+ from agente_ia.native_core import NativeClient
+ from agente_ia.config import AppSettings
+ model=tmp_path/'qwen.gguf';model.write_bytes(b'GGUF');(tmp_path/'motor').mkdir();seen=[]
+ class Process:
+  def __init__(self,args,**kwargs):seen.append(args[args.index('--prompt-cache')+1]);self.stdout=io.BytesIO(b'Listo')
+  def poll(self):return 0
+  def wait(self,**kwargs):return 0
+ monkeypatch.setattr('agente_ia.native_core.subprocess.Popen',Process)
+ c=NativeClient(tmp_path,tmp_path/'state',model)
+ for changed in [False,True]:
+  if changed:(tmp_path/'motor/ggml-cpu-haswell.dll').write_bytes(b'new-engine')
+  c.generate(AppSettings(),[{'role':'user','content':'Hola'}],lambda x:None)
+ assert seen[0]!=seen[1]

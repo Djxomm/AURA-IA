@@ -14,11 +14,19 @@ from agente_ia.native_voice import VoiceKey,voices,synthesize
 from agente_ia.agent import AgentEngine,ApprovalRegistry,ApprovalDecision
 from agente_ia.skills import SkillStore
 from agente_ia.aurax_workspace import AuraxWorkspace
+from agente_ia.chat_controls import ChatControls
+from agente_ia.native_shell import build_shell,icon
+from agente_ia.native_settings import SettingsHub
+from agente_ia.hardware_profile import hardware_info,recommended_settings
+from agente_ia.chat_render import conversation_html
+from agente_ia.floating_companion import FloatingCompanion as FloatingAssistant
 
 ROOT=Path(sys.executable).parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parent/'runtime'
 ASSETS=Path(__file__).resolve().parent/'agente_ia/static/assets'
 STYLE='''QWidget{background:#07101e;color:#e5edf9;font-family:Segoe UI;font-size:13px;} QMainWindow,QDialog{background:#07101e;} QPushButton{background:#10253a;border:1px solid #24506a;border-radius:8px;padding:10px 13px;} QPushButton:hover{background:#164052;border-color:#00d8e6;} QPushButton:pressed{background:#086578;} QPushButton:disabled{color:#8493a8;background:#14202c;} QLineEdit,QPlainTextEdit,QTextBrowser,QListWidget,QTreeView,QComboBox,QSpinBox,QDoubleSpinBox{background:#0b1829;border:1px solid #234258;border-radius:8px;padding:8px;selection-background-color:#126176;selection-color:white;} QListWidget::item{padding:9px;} QListWidget::item:selected{background:#16455a;color:white;} QLabel#brand{font-size:25px;font-weight:bold;color:#00e9f1;} QLabel#status{color:#91dce1;padding:6px;} QSplitter::handle{background:#183446;width:2px;} QCheckBox{padding:5px;} QScrollBar:vertical{background:#091524;width:10px;} QScrollBar::handle:vertical{background:#28566b;min-height:28px;border-radius:4px;}'''
 STYLE += """
+QWidget#iconRail{background:#060e1a;} QWidget#chatArea{background:#0b1424;} QLabel#sectionLabel{color:#99adc7;font-size:11px;padding-top:8px;} QToolButton{color:#dae7f8;background:transparent;border:none;border-radius:8px;padding:4px;} QToolButton:hover{background:#18344f;} QToolButton:focus{border:1px solid #8bd2ff;} QLineEdit:focus,QPlainTextEdit:focus,QComboBox:focus{border:1px solid #8bd2ff;} QToolButton#sendButton{background:#2878c6;border-radius:18px;} QToolButton#sendButton:hover{background:#246cb5;} QToolButton#localMenu{text-align:left;padding:10px;background:#102239;}
+
 QWidget{background:#0b1424;color:#e4eaf4;}
 QMainWindow,QDialog{background:#0b1424;}
 QWidget#sidebar{background:#07101d;}
@@ -32,7 +40,7 @@ QLabel#chatTitle{font-size:16px;font-weight:600;}
 QLabel#status{color:#9cb3cf;font-size:12px;}
 QTextBrowser#conversation{background:#0b1424;border:none;font-size:15px;padding:18px 22px;}
 QWidget#composer{background:#142238;border:1px solid #2a3d58;border-radius:16px;}
-QWidget#composer QPlainTextEdit{background:transparent;border:none;font-size:14px;padding:9px;}
+QWidget#composer QPlainTextEdit{background:transparent;border:none;font-size:14px;padding:2px 8px;}
 QWidget#composer QPushButton{background:transparent;border:none;padding:7px 10px;}
 QWidget#composer QPushButton:hover{background:#213b59;}
 QWidget#composer QPushButton#sendButton{background:#2563eb;color:white;border:none;border-radius:10px;padding:9px 18px;font-weight:600;}
@@ -45,24 +53,6 @@ QSplitter::handle{background:#1b2a40;width:1px;}
 class Bus(QObject):event=Signal(str,object)
 def btn(text,fn):
  b=QPushButton(text);b.clicked.connect(fn);return b
-
-class FloatingAssistant(QWidget):
- def __init__(self,owner):
-  super().__init__(None,Qt.WindowType.Tool|Qt.WindowType.FramelessWindowHint|Qt.WindowType.WindowStaysOnTopHint)
-  self.owner=owner;self.drag=None;self.pulse=False;self.setFixedSize(244,150);self.setWindowTitle('Asistente AURA');self.setStyleSheet('QWidget{background:#0b2032;color:#e6faff;border-radius:12px;} QPushButton{padding:6px;background:#12384b;border:1px solid #28738a;border-radius:6px;} QPushButton:hover{background:#176377;}');layout=QVBoxLayout(self);head=QHBoxLayout();self.orb=QLabel();self.pixmap=QPixmap(str(ASSETS/'aura-icono-transparente.png'));self.frames=[self.pixmap.scaled(n,n,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation) for n in (50,54)];self.orb.setPixmap(self.frames[1]);self.orb.setFixedSize(58,58);self.orb.setAlignment(Qt.AlignmentFlag.AlignCenter);self.orb.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);head.addWidget(self.orb);label=QLabel('AURA IA\nTu asistente local');label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);head.addWidget(label);layout.addLayout(head);self.message=QLabel('Lista para ayudarte. Arrástrame.');self.message.setWordWrap(True);self.message.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);layout.addWidget(self.message);row=QHBoxLayout();row.addWidget(btn('Abrir',self.open));row.addWidget(btn('Dictar',self.dictate));row.addWidget(btn('Ocultar',self.hide_safe));layout.addLayout(row)
-  area=QApplication.primaryScreen().availableGeometry();self.move(area.right()-self.width()-20,area.bottom()-self.height()-20)
- def open(self):self.owner.showNormal();self.owner.raise_();self.owner.activateWindow();self.owner.input.setFocus()
- def dictate(self):self.open();self.owner.toggle_dictation()
- def hide_safe(self):self.open();self.hide();self.owner.save_pref('floating',False)
- def update_state(self,active,text):
-  self.message.setText(text[:85]);self.pulse=not self.pulse if active else False;self.orb.setPixmap(self.frames[1 if self.pulse else 0])
- def mousePressEvent(self,event):
-  if event.button()==Qt.MouseButton.LeftButton:self.drag=event.globalPosition().toPoint()-self.frameGeometry().topLeft();event.accept()
- def mouseMoveEvent(self,event):
-  if self.drag is not None and event.buttons()&Qt.MouseButton.LeftButton:
-   target=event.globalPosition().toPoint()-self.drag;area=QApplication.primaryScreen().availableGeometry();target.setX(max(area.left(),min(target.x(),area.right()-self.width())));target.setY(max(area.top(),min(target.y(),area.bottom()-self.height())));self.move(target);event.accept()
- def mouseReleaseEvent(self,event):self.drag=None
- def mouseDoubleClickEvent(self,event):self.open()
 
 class StartupSplash(QWidget):
  """Loading animation shown before the main window, until the model is ready."""
@@ -80,22 +70,13 @@ class Window(QMainWindow):
   except (OSError,ValueError):self.prefs={}
   existing_database=(self.data/'aura.db').exists();self.store=Storage(self.data/'aura.db');projects=self.data/'Proyectos';projects.mkdir(exist_ok=True)
   settings=self.store.get_settings()
-  if not existing_database or not Path(settings.workspace_path).is_dir():self.store.save_settings(settings.model_copy(update={'workspace_path':str(projects),'num_thread':2,'num_ctx':4096,'tool_mode':'xml'}))
+  if not existing_database or not Path(settings.workspace_path).is_dir():self.store.save_settings(settings.model_copy(update={'workspace_path':str(projects),'tool_mode':'xml',**recommended_settings(hardware_info())}))
   self.memory=Memory(self.data/'memoria.db');self.skills=SkillStore(self.data/'skills');self.skills.install_defaults(ROOT/'skills');self.registry=ApprovalRegistry()
   self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
   self.setWindowTitle('AURA · Inteligencia Artificial — Escritorio');self.setWindowIcon(QIcon(str(ASSETS/'aura-icono-transparente.png')));self.resize(1180,760);self.setMinimumSize(760,540)
-  split=QSplitter();self.setCentralWidget(split);side=QWidget();side.setObjectName('sidebar');side.setMinimumWidth(220);side.setMaximumWidth(330);sl=QVBoxLayout(side);sl.setSpacing(3);sl.setContentsMargins(12,16,12,12);brand=QLabel('AURA IA');brand.setObjectName('brand');sl.addWidget(brand);sl.addWidget(QLabel('INTELIGENCIA ARTIFICIAL · LOCAL'))
-  for title,fn in [('＋ Nueva conversación',self.new_chat),('⌘ AURAX · Codificador',self.open_aurax),('▤ Bases de datos SQL',self.open_sql),('◎ Explorador de Internet',self.open_browser),('◈ Modelos',self.models),('⚙ Pensamiento y ajustes',self.settings),('▣ Proyecto y archivos',self.project),('✧ Habilidades',self.skills_panel),('◉ Memoria',self.memory_panel),('♫ Voz y audio',self.voice_settings),('›_ Terminal y compilación',self.terminal),('↶ Cambios y deshacer',self.changes)]:
-   nav=btn(title,fn);nav.setObjectName('newChatButton' if title.startswith('＋') else 'navButton');sl.addWidget(nav)
-  self.search=QLineEdit();self.search.setPlaceholderText('Buscar conversación…');self.search.textChanged.connect(self.filter_history);sl.addWidget(self.search);self.history=QListWidget();self.history.itemClicked.connect(self.select_chat);sl.addWidget(self.history)
-  right=QWidget();rl=QVBoxLayout(right);top=QHBoxLayout();self.heading=QLabel('Nueva conversación');self.heading.setObjectName('chatTitle');self.heading.setFont(QFont('Segoe UI',14,QFont.Weight.Bold));top.addWidget(self.heading,1);self.mode=QComboBox();self.mode.addItems(['Conversación','AURAX · Programación']);top.addWidget(self.mode);self.temporary=QCheckBox('Temporal');self.temporary.setToolTip('Sin guardar conversación ni usar memoria.');top.addWidget(self.temporary);rl.addLayout(top)
-  self.status=QLabel('Preparando AURA…');self.status.setObjectName('status');self.status.setWordWrap(True);rl.addWidget(self.status)
-  self.chat=QTextBrowser();self.chat.setObjectName('conversation');self.chat.setOpenExternalLinks(False);rl.addWidget(self.chat,1)
-  composer=QWidget();composer.setObjectName('composer');compose_layout=QVBoxLayout(composer);compose_layout.setContentsMargins(7,5,7,5);compose_layout.setSpacing(2)
-  self.input=QPlainTextEdit();self.input.setPlaceholderText('Escribe a AURA. Para guardar un recuerdo: «recuerda: …»');self.input.setMaximumHeight(90);self.input.setMinimumHeight(58);compose_layout.addWidget(self.input)
-  row=QHBoxLayout();self.mic=btn('● Dictar',self.toggle_dictation);row.addWidget(self.mic);row.addWidget(btn('▶ Leer',self.speak));row.addWidget(btn('■ Detener',self.stop));self.auto_voice=QCheckBox('Leer respuestas');self.auto_voice.setChecked(self.prefs.get('auto_voice',False));self.auto_voice.toggled.connect(lambda x:self.save_pref('auto_voice',x));row.addWidget(self.auto_voice);row.addStretch();self.send_button=btn('Enviar →',self.send);self.send_button.setObjectName('sendButton');row.addWidget(self.send_button);compose_layout.addLayout(row);rl.addWidget(composer);footer=QLabel('AURA · Proyectos y memoria en este equipo');footer.setObjectName('footer');footer.setAlignment(Qt.AlignmentFlag.AlignCenter);rl.addWidget(footer)
-  split.addWidget(side);split.addWidget(right);split.setSizes([250,930]);self.audio=QAudioOutput();self.player=QMediaPlayer();self.player.setAudioOutput(self.audio);self.audio.setVolume(self.prefs.get('volume',90)/100)
+  build_shell(self,ASSETS)
+  self.audio=QAudioOutput();self.player=QMediaPlayer();self.player.setAudioOutput(self.audio);self.audio.setVolume(self.prefs.get('volume',90)/100)
   self.floating=FloatingAssistant(self)
   self.new_chat();self.refresh_history();self.timer=QTimer(self);self.timer.timeout.connect(self.progress);self.timer.start(300)
   self.startup=None;self.startup_finished=False;self.attached_files=[];self.aurax=None;self.aurax_dock=None;self.mode.currentIndexChanged.connect(lambda index:self.open_aurax() if index==1 else None)
@@ -112,10 +93,20 @@ class Window(QMainWindow):
  def open_aurax(self):
   if (ROOT/'skills/multilenguaje/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','multilenguaje')
   if self.aurax is None:
-   self.aurax=AuraxWorkspace(self,ROOT);self.aurax.attach_requested.connect(self.attach_aurax_file);self.aurax_dock=QDockWidget('AURAX · Espacio de programación',self);self.aurax_dock.setWidget(self.aurax);self.aurax_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea);self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.aurax_dock)
+   self.aurax=AuraxWorkspace(self,ROOT);self.aurax.attach_requested.connect(self.attach_aurax_file);self.aurax_dock=QDockWidget('AURAX · Espacio de programación',self);self.aurax_dock.setWidget(self.aurax);self.aurax_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea);compact=self.width()<self.centralWidget().minimumSizeHint().width()+self.aurax.minimumSizeHint().width()+12;previous=self.size();self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.aurax_dock)
+   if compact:
+    self.aurax_dock.setFloating(True);area=self.screen().availableGeometry();self.aurax_dock.resize(min(860,area.width()-40),min(620,area.height()-40));self.resize(previous)
   self.aurax_dock.show();self.aurax_dock.raise_()
   if self.mode.currentIndex()!=1:self.mode.setCurrentIndex(1)
   self.temporary.setChecked(False);self.input.setPlaceholderText('Pide a AURAX crear, revisar o corregir archivos del proyecto…')
+ def attach_chat_files(self):
+  if self.guarded():return
+  root=Path(self.store.get_settings().workspace_path).resolve()
+  paths,_=QFileDialog.getOpenFileNames(self,'Adjuntar archivos del proyecto',str(root),'Archivos (*)')
+  for path in paths:
+   target=Path(path).resolve()
+   if not target.is_relative_to(root):self.error('Selecciona archivos dentro de la carpeta del proyecto. Puedes cambiarla en Proyecto y archivos.');continue
+   self.attach_aurax_file(target.relative_to(root).as_posix())
  def attach_aurax_file(self,path):
   if path not in self.attached_files and len(self.attached_files)>=4:self.error('Adjunta hasta cuatro archivos por solicitud.');return
   if path not in self.attached_files:self.attached_files.append(path)
@@ -128,7 +119,7 @@ class Window(QMainWindow):
   QTimer.singleShot(0,self.prepare_model)
  def finish_startup(self):
   if self.startup_finished:return
-  self.startup_finished=True;self.showNormal()
+  self.startup_finished=True;self.showNormal();self.input.setFocus()
   if self.prefs.get('floating',True):self.floating.show()
   splash=self.startup;self.startup=None
   if splash is not None:splash.release()
@@ -153,11 +144,10 @@ class Window(QMainWindow):
   if self.busy:return
   self.sid=item.data(Qt.ItemDataRole.UserRole);s=self.store.get_session(self.sid);self.heading.setText(s['title']);self.items=[(x['role'],x['content']) for x in self.store.get_messages(self.sid)];self.render()
  def render(self):
-  text='\n\n---\n\n'.join(('**Tú**\n\n' if role=='user' else '**AURA**\n\n')+content for role,content in self.items)
-  if not text:
-   self.chat.setHtml('<div style="text-align:center;margin-top:40px"><img width="170" src="'+(ASSETS/'aura-logo-transparente.png').as_uri()+'"><h1 style="color:#00e9f1">AURA IA</h1><p>Programación, ideas y memoria local.</p><p>Elige tu proyecto o empieza una conversación.</p></div>')
-  else:self.chat.setMarkdown(text)
-  self.chat.moveCursor(QTextCursor.MoveOperation.End)
+  if not self.items:
+   self.chat.set_welcome('<div style="text-align:center;margin-top:40px"><img width="110" src="'+(ASSETS/'aura-logo-transparente.png').as_uri()+'"><h1 style="color:#00e9f1">AURA IA</h1><p>¿En qué trabajamos hoy?</p><p>Elige tu proyecto o empieza una conversación.</p></div>')
+  else:self.chat.set_messages(self.items)
+  self.chat.scroll_to_end()
  def prepare_model(self):
   if self.busy or self.warming:return
   self.warming=True;self.send_button.setEnabled(False);self.started=time.monotonic();self.status.setText('Preparando caché del modelo para acelerar las consultas…');settings=self.store.get_settings().model_copy(update={'max_predict_tokens':1})
@@ -169,7 +159,7 @@ class Window(QMainWindow):
   speaking=self.player.playbackState()==QMediaPlayer.PlaybackState.PlayingState
   if self.floating.isVisible():self.floating.update_state(self.busy or self.warming or self.dictating or speaking,'Escuchando…' if self.dictating else 'Hablando…' if speaking else 'Preparando el modelo…' if self.warming else 'Pensando y trabajando…' if self.busy else 'Lista. ¿En qué te ayudo?')
   if getattr(self,'render_pending',False):
-   self.render_pending=False;delta=self.answer[getattr(self,'drawn',0):];self.chat.moveCursor(QTextCursor.MoveOperation.End);self.chat.insertPlainText(delta);self.drawn=len(self.answer)
+   self.render_pending=False;delta=self.answer[getattr(self,'drawn',0):];self.chat.append_to_last(delta);self.drawn=len(self.answer)
   if self.warming:
    elapsed=str(round(time.monotonic()-self.started,1))+' s';self.status.setText('Preparando AURA · '+elapsed)
   if self.busy:
@@ -187,7 +177,7 @@ class Window(QMainWindow):
    try:self.memory.save(text.split(':',1)[1],project,'Solicitud explícita del usuario');self.items.extend([('user',text),('assistant','Recuerdo guardado para este proyecto. Puedes editarlo en Memoria.')]);self.input.clear();self.render()
    except Exception as e:self.error(e)
    return
-  self.input.clear();self.items.append(('user',text));self.items.append(('assistant',''));self.answer='';self.drawn=0;self.render();self.busy=True;self.send_button.setEnabled(False);self.temporary.setEnabled(False);self.mode.setEnabled(False);self.started=time.monotonic();self.run_changes=0;temporary=self.temporary.isChecked();programming=self.mode.currentIndex()==1
+  self.input.clear();self.items.append(('user',text));self.items.append(('assistant',''));self.answer='';self.drawn=0;self.render();self.busy=True;self.chat_controls.setEnabled(False);self.send_button.setEnabled(True);self.send_button.setIcon(icon('stop'));self.send_button.setAccessibleName('Detener respuesta');self.send_button.setToolTip('Detener respuesta');self.temporary.setEnabled(False);self.mode.setEnabled(False);self.started=time.monotonic();self.run_changes=0;temporary=self.temporary.isChecked();programming=self.mode.currentIndex()==1
   if not self.sid and not temporary:self.sid=self.store.create_session(title=text[:48],workspace_path=project,provider='nativo',model=self.client.model.name)['id']
   sid=self.sid;attachments=list(self.attached_files);self.attached_files.clear()
   def work():
@@ -235,32 +225,50 @@ class Window(QMainWindow):
   elif kind in ('done','failed'):
    self.render_pending=False;self.drawn=len(self.answer)
    answer=data if kind=='done' else 'No se completó la respuesta: '+data
-   self.items[-1]=('assistant',answer);self.last_answer=answer;self.busy=False;self.send_button.setEnabled(True);self.temporary.setEnabled(True);self.mode.setEnabled(True);self.render();self.refresh_history();self.status.setText(('Respuesta terminada' if kind=='done' else 'Atención requerida')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(self.client.first_text,2))+' s' if self.client.first_text else ''))
+   self.items[-1]=('assistant',answer);self.last_answer=answer;self.busy=False;self.chat_controls.setEnabled(True);self.send_button.setEnabled(True);self.send_button.setIcon(icon('send','#ffffff'));self.send_button.setAccessibleName('Enviar mensaje');self.send_button.setToolTip('Enviar mensaje');self.temporary.setEnabled(True);self.mode.setEnabled(True);self.render();self.refresh_history();self.status.setText(('Respuesta terminada' if kind=='done' else 'Atención requerida')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(self.client.first_text,2))+' s' if self.client.first_text else ''))
    if self.client.effective_context and self.client.effective_context>self.store.get_settings().num_ctx:self.status.setText(self.status.text()+' · contexto ampliado a '+str(self.client.effective_context))
    if kind=='done' and self.mode.currentIndex()==1:
     summary='AURAX · '+str(getattr(self,'run_changes',0))+' cambios aplicados' if getattr(self,'run_changes',0) else 'AURAX · respuesta sin cambios en archivos';self.status.setText(self.status.text()+' · '+summary)
     if self.aurax is not None:self.aurax.console.appendPlainText(summary)
    if kind=='done' and self.auto_voice.isChecked():self.speak()
   elif kind=='approval':
-   p=data['proposal'];d,l=self.dialog('Revisar cambio · '+p.file_path);l.addWidget(QLabel(p.reason));view=QPlainTextEdit(p.unified_diff or p.proposed_content or 'Eliminar archivo');view.setReadOnly(True);l.addWidget(view);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Yes|QDialogButtonBox.StandardButton.No);buttons.accepted.connect(d.accept);buttons.rejected.connect(d.reject);l.addWidget(buttons);data['approved']=d.exec()==QDialog.DialogCode.Accepted;data['event'].set()
-  elif kind=='dictated':self.dictating=False;self.mic.setText('● Dictar');self.input.setPlainText(data);self.status.setText('Dictado listo. Corrige el texto y pulsa Enviar.')
+   self.floating.set_attention('Revisa el cambio propuesto.');p=data['proposal'];d,l=self.dialog('Revisar cambio · '+p.file_path);l.addWidget(QLabel(p.reason));view=QPlainTextEdit(p.unified_diff or p.proposed_content or 'Eliminar archivo');view.setReadOnly(True);l.addWidget(view);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Yes|QDialogButtonBox.StandardButton.No);buttons.accepted.connect(d.accept);buttons.rejected.connect(d.reject);l.addWidget(buttons);data['approved']=d.exec()==QDialog.DialogCode.Accepted;data['event'].set();self.floating.set_attention('')
+  elif kind=='dictated':self.dictating=False;self.mic.setToolTip('● Dictar');self.input.setPlainText(data);self.status.setText('Dictado listo. Corrige el texto y pulsa Enviar.')
   elif kind=='voice_ready':self.player.setSource(QUrl.fromLocalFile(str(data)));self.player.play();self.status.setText('Hablando · Detener corta el audio')
   elif kind=='voice_fallback':self.status.setText(data)
   elif kind=='notice':self.error(data)
- def stop(self):self.voice_generation+=1;self.client.stop();self.dictation.stop();self.player.stop();self.dictating=False;self.mic.setText('● Dictar');p=self.voice_process;self.voice_process=None;self.status.setText('Deteniendo…');p.terminate() if p is not None and p.poll() is None else None
+ def stop(self):self.voice_generation+=1;self.client.stop();self.dictation.stop();self.player.stop();self.dictating=False;self.mic.setToolTip('● Dictar');p=self.voice_process;self.voice_process=None;self.status.setText('Deteniendo…');p.terminate() if p is not None and p.poll() is None else None
  def settings(self):
   if self.guarded():return
-  d,l=self.dialog('Pensamiento y rendimiento · i5 antiguo');form=QFormLayout();s=self.store.get_settings();effort=QComboBox();effort.addItems(['rapido','equilibrado','profundo']);effort.setCurrentText(s.thinking_effort);form.addRow('Esfuerzo',effort);length=QSpinBox();length.setRange(0,2048);length.setSingleStep(128);length.setValue(s.max_predict_tokens);length.setSpecialValueText('Automático');form.addRow('Máximo de tokens por respuesta',length);ctx=QSlider(Qt.Orientation.Horizontal);ctx.setRange(2048,8192);ctx.setSingleStep(1024);ctx.setPageStep(1024);ctx.setTickInterval(2048);ctx.setTickPosition(QSlider.TickPosition.TicksBelow);ctx.setValue(min(8192,max(2048,s.num_ctx)));ctxlabel=QLabel();ctxlabel.setWordWrap(True);form.addRow('Espacio de contexto',ctx);form.addRow(ctxlabel);ctx.valueChanged.connect(lambda value:ctx.setValue(round(value/1024)*1024));ctx.valueChanged.connect(lambda value:ctxlabel.setText(str(value)+' tokens · recomendado 4096 para este i5; máximo 8192. Más contexto puede tardar más.'));ctxlabel.setText(str(ctx.value())+' tokens · recomendado 4096 para este i5; máximo 8192.');automatic=QCheckBox('Ampliar automáticamente hasta 8192 si hace falta');automatic.setChecked(self.client.auto_context);form.addRow(automatic);threads=QComboBox();threads.addItems(['1','2','4']);threads.setCurrentText(str(s.num_thread));form.addRow('Hilos CPU · recomendado 2',threads);temp=QDoubleSpinBox();temp.setRange(0,1.5);temp.setSingleStep(.05);temp.setValue(s.temperature);form.addRow('Creatividad',temp);floating=QCheckBox('Mostrar asistente flotante');floating.setChecked(self.prefs.get('floating',True));form.addRow(floating);intro=QCheckBox('Video al iniciar');intro.setChecked(self.prefs.get('intro',True));form.addRow(intro);l.addLayout(form);note=QLabel('Sin cuotas de uso. Contexto y longitud tienen límites físicos. Profundo no convierte este modelo en otro. La carga por proceso ahorra memoria en reposo; los tiempos varían y pueden superar 3,5 s.');note.setWordWrap(True);l.addWidget(note)
-  def save():self.store.save_settings(s.model_copy(update={'thinking_effort':effort.currentText(),'max_predict_tokens':length.value(),'num_ctx':ctx.value(),'num_thread':int(threads.currentText()),'temperature':temp.value(),'tool_mode':'xml'}));self.client.auto_context=automatic.isChecked();self.save_pref('auto_context',automatic.isChecked());self.save_pref('intro',intro.isChecked());self.save_pref('floating',floating.isChecked());self.floating.setVisible(floating.isChecked());d.accept()
-  l.addWidget(btn('Guardar ajustes',save));l.addWidget(btn('Borrar caché del modelo',self.clear_cache));d.exec()
+  SettingsHub(self).exec()
  def clear_cache(self):
   if self.guarded():return
   folder=self.client.data/'cache'
   for path in folder.glob('*.bin'):path.unlink(missing_ok=True)
   self.status.setText('Caché borrada. La próxima consulta puede tardar más.')
+ def refresh_chat_controls(self):
+  paths=sorted((ROOT/'modelos').glob('*.gguf'));registered=self.prefs.get('models',[])
+  if isinstance(registered,list):paths.extend(Path(p) for p in registered if isinstance(p,str))
+  self.chat_controls.refresh(self.client.model,paths,self.store.get_settings().thinking_effort)
+ def select_effort(self,value):
+  if self.guarded():self.refresh_chat_controls();return
+  self.store.save_settings(self.store.get_settings().model_copy(update={'thinking_effort':value}));self.refresh_chat_controls()
+ def browse_chat_model(self):
+  if self.guarded():return
+  path,_=QFileDialog.getOpenFileName(self,'Seleccionar modelo Qwen Instruct GGUF',str(ROOT/'modelos'),'Modelos (*.gguf)')
+  if path:self.select_model(path)
+ def select_model(self,path):
+  if self.guarded():return
+  try:
+   p=Path(path).resolve()
+   with p.open('rb') as f:
+    if f.read(4)!=b'GGUF' or b'qwen2' not in f.read(512000).lower():raise ValueError('Selecciona un Qwen2 / Qwen2.5 Instruct GGUF compatible. La integración de otras familias sigue pendiente.')
+   registered=self.prefs.get('models',[]);registered=registered if isinstance(registered,list) else [];self.save_pref('models',list(dict.fromkeys([str(p),*[v for v in registered if isinstance(v,str)]])))
+   self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();self.status.setText('Modelo seleccionado: '+p.stem)
+  except (OSError,ValueError) as exc:self.error(str(exc));self.refresh_chat_controls()
  def models(self):
   if self.guarded():return
-  d,l=self.dialog('Modelos locales');note=QLabel('Motor sin AVX. Esta versión usa formato de conversación ChatML: Qwen Coder Instruct GGUF. Modelos 3B o 7B necesitan más memoria y serán más lentos. Solo se ejecuta un modelo por turno.');note.setWordWrap(True);l.addWidget(note);selected=QLineEdit(str(self.client.model));l.addWidget(selected)
+  d,l=self.dialog('Modelos locales');note=QLabel('Motor CPU con selección automática según el procesador, conservando soporte para equipos antiguos. Admite Qwen2 / Qwen2.5 Instruct GGUF. Los modelos grandes necesitan más memoria y tiempo. Solo se ejecuta un modelo por turno.');note.setWordWrap(True);l.addWidget(note);selected=QLineEdit(str(self.client.model));l.addWidget(selected)
   def browse():
    path,_=QFileDialog.getOpenFileName(d,'Modelo Qwen Coder GGUF','','Modelos (*.gguf)')
    if path:selected.setText(path)
@@ -271,7 +279,7 @@ class Window(QMainWindow):
     with p.open('rb') as f:
      if f.read(4)!=b'GGUF':raise ValueError('GGUF inválido.')
      if b'qwen2' not in f.read(512000).lower():raise ValueError('Esta versión nativa admite modelos Qwen2 / Qwen2.5 Instruct ChatML.')
-    self.client.model=p;self.save_pref('model',str(p));d.accept()
+    self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();d.accept()
    except Exception as e:self.error(e)
   l.addWidget(btn('Aplicar modelo',apply));d.exec()
  def project(self):
@@ -366,9 +374,9 @@ class Window(QMainWindow):
    except Exception as e:self.error(e)
   l.addWidget(btn('Deshacer cambio seleccionado',undo));d.exec()
  def toggle_dictation(self):
-  if self.dictating:self.dictation.stop();self.mic.setText('Transcribiendo…');return
+  if self.dictating:self.dictation.stop();self.mic.setToolTip('Transcribiendo…');return
   if self.busy or self.warming:self.error('Espera la preparación o detén la respuesta antes de dictar.');return
-  self.player.stop();self.dictating=True;self.mic.setText('■ Terminar dictado');self.status.setText('Escuchando · máximo 60 segundos · pulsa Terminar dictado')
+  self.player.stop();self.dictating=True;self.mic.setToolTip('■ Terminar dictado');self.status.setText('Escuchando · máximo 60 segundos · pulsa Terminar dictado')
   def work():
    try:self.bus.event.emit('dictated',self.dictation.listen(self.prefs.get('microphone')))
    except Exception as e:self.bus.event.emit('dictated','');self.bus.event.emit('notice','No se pudo usar el micrófono: '+str(e))
@@ -493,3 +501,4 @@ if __name__=='__main__':
   if '--data-dir' in sys.argv:
    p=Path(sys.argv[sys.argv.index('--data-dir')+1]);p.mkdir(parents=True,exist_ok=True);(p/'error-nativo.txt').write_text(str(exc),'utf-8')
   raise
+

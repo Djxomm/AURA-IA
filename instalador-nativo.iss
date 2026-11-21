@@ -1,4 +1,4 @@
-#define AppVersion "3.7.0"
+#define AppVersion "3.8.0"
 [Setup]
 AppId=AURA-IA-Nativa
 AppName=AURA Inteligencia Artificial
@@ -25,7 +25,7 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Files]
 Source: "dist\AURA-Nativa\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "modelos\*,voz\*,frameworks\npm-cache.zip"
-Source: "runtime\modelos\*"; DestDir: "{app}\modelos"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
+Source: "runtime\modelos\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"; DestDir: "{app}\modelos"; Flags: ignoreversion nocompression
 Source: "runtime\voz\*"; DestDir: "{app}\voz"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
 
 Source: "runtime\frameworks\npm-cache.zip"; DestDir: "{app}\frameworks"; Flags: ignoreversion nocompression

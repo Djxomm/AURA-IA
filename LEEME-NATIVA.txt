@@ -1,3 +1,11 @@
+AURA 3.8.0 · Escritorio azul, chat compacto y asistente AURAX
+
+Modelo y razonamiento en la barra de escritura. Enter envía; Shift + Enter añade una línea. Mensajes sin separadores: usuario gris claro, AURA azul oscuro. El asistente flotante se abre con clic, se mueve arrastrando y ofrece opciones con clic derecho. Configuración agrupada por secciones. CPU con selección automática y variantes x64/SSE4.2 conservadas para equipos antiguos.
+
+El instalador incluye el modelo ligero. Los modelos adicionales descargados se seleccionan con el menú del chat > Buscar otro modelo en la PC. Solo se carga un modelo por respuesta y se libera al terminar.
+
+AURA 3.7.1: envío exacto del formato de conversación y del código, caché separada al cambiar el motor, selección automática de módulos CPU compatibles. El instalador conserva el modelo ligero; los modelos descargados adicionales se seleccionan en Modelos > Buscar modelo en la PC.
+
 AURA 3.7.0: creación de proyectos
 Las peticiones para crear juegos o programas pasan a AURAX. Los archivos se revisan antes de guardarlos. Si el modelo entrega fragmentos o un lenguaje incorrecto, se reintenta de forma limitada y se informa que la tarea quedó incompleta. Guardar no equivale a verificar, ejecutar o compilar. El modelo local pequeño puede necesitar tareas divididas o un modelo más capaz.
 

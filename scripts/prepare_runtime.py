@@ -25,7 +25,7 @@ def main():
  with zipfile.ZipFile(archive) as package:
   for entry in package.infolist():
    name=Path(entry.filename).name
-   if name in allowed:
+   if name in allowed or (name.startswith('ggml-cpu-') and name.endswith('.dll')):
     with package.open(entry) as source,(motor/name).open('wb') as output:shutil.copyfileobj(source,output)
  if not (motor/'llama-completion.exe').exists():raise RuntimeError('Falta llama-completion.exe en el paquete oficial.')
  speech=manifest['vosk'];archive=download(speech['url'],downloads/'vosk-es.zip',speech['sha256']);voice=runtime/'voz';voice.mkdir(parents=True,exist_ok=True)

@@ -81,7 +81,13 @@ def check_javascript(content, runtime):
         raise ValueError('JavaScript no pasa la revisión de sintaxis: '+result.stderr[-1200:])
 
 
-def code_proposal(text, expected, workspace, runtime=None):
+def requested_code_path(brief, language):
+    extensions={'python':{'.py'},'html':{'.html','.htm'},'javascript':{'.js','.mjs'}}
+    candidates=re.findall(r'(?<![\w./-])([A-Za-z0-9_./-]+\.(?:py|html?|m?js))\b',brief)
+    return next((path for path in reversed(candidates) if Path(path).suffix.lower() in extensions.get(language,set())),None)
+
+
+def code_proposal(text, expected, workspace, runtime=None, preferred_path=None):
     blocks = list(re.finditer(r'```(python|py|html|html5|javascript|js)\s*\n(.*?)```', text.replace('\r',''), re.S | re.I))
     if len(blocks) != 1:
         raise ValueError('Se necesita un archivo de código completo, no fragmentos separados o incompletos.')
@@ -89,7 +95,7 @@ def code_proposal(text, expected, workspace, runtime=None):
     language = {'py':'python','html5':'html','js':'javascript'}.get(match[1].lower(), match[1].lower())
     if expected and language != expected:
         raise ValueError('El modelo respondió en '+language+' pero se pidió '+expected+'.')
-    path = {'python':'main.py','html':'index.html','javascript':'main.js'}[language]
+    path = preferred_path or {'python':'main.py','html':'index.html','javascript':'main.js'}[language]
     content = match[2].replace('\r','').strip()+'\n'
     validate_code(path, content, expected, runtime)
     target = workspace.resolve_safe_path(path, allow_write=True)

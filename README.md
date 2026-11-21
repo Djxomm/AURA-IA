@@ -4,7 +4,7 @@
 
 Asistente de escritorio para **Windows 10 x64**, con programación local, memoria persistente y asistente flotante. **Las contribuciones son bienvenidas.**
 
-La interfaz principal tiene una distribución de chat en azul oscuro, con navegación lateral compacta. Utiliza PySide6/Qt: no necesita un navegador externo ni inicia un servidor web para la interfaz. El explorador de Internet opcional se abre en una ventana integrada. El motor de texto se comunica por procesos locales y está preparado con bibliotecas CPU SSE4.2/x64 para equipos antiguos. El objetivo de desarrollo incluye un i5 de primera generación y 16 GB RAM; todavía falta probar ese equipo físico.
+La interfaz principal tiene una distribución de chat en azul oscuro, con navegación lateral compacta. Utiliza PySide6/Qt: no necesita un navegador externo ni inicia un servidor web para la interfaz. El explorador de Internet opcional se abre en una ventana integrada. El motor de texto se comunica por procesos locales y elige automáticamente bibliotecas compatibles con el procesador. Conserva las variantes CPU SSE4.2/x64 para equipos antiguos. El objetivo de desarrollo incluye un i5 de primera generación y 16 GB RAM; todavía falta probar ese equipo físico.
 
 ## AURAX · Codificador integrado
 
@@ -13,6 +13,24 @@ Abre **AURAX · Codificador** en la barra lateral. Incluye explorador del proyec
 El agente utiliza el mismo modelo local y las aprobaciones de cambios. Las respuestas sin archivos aplicados se identifican como tales. **Revisar código IA** abre un bloque de la respuesta como borrador, sin escribirlo hasta que se revise y guarde.
 
 Se comprobó una compilación desde el panel y se ejecutó el EXE resultante. Un modelo pequeño puede equivocarse en rutas o código; revisa las propuestas. La preparación de una tarea de programación larga puede tardar bastante más que una consulta corta con caché.
+
+## Interfaz y asistente AURAX (3.8)
+
+Chat azul oscuro con cuadro de escritura compacto y adaptable, Enter para enviar y Shift + Enter para añadir una línea. Modelo y razonamiento se seleccionan en el compositor. Cada mensaje usa una burbuja: usuario gris claro, AURA azul oscuro, sin separadores.
+
+La navegación reúne proyectos, historial y herramientas. Configuración se organiza por secciones. El asistente AURAX es un personaje transparente que abre el codificador y ofrece dictado, lectura y ocultación; su animación se detiene en reposo y se puede desactivar.
+
+Se comprobó el flujo real con un modelo Qwen Coder 7B: propuesta revisada, archivo con el nombre solicitado y cuatro casos correctos. El verificador se compiló a EXE con el SDK incluido y ejecutó los cuatro casos. La interfaz se prueba también a 760 × 540; el editor mantiene sus acciones accesibles a 400 px. Son pruebas limitadas, no una garantía de creación de cualquier proyecto.
+
+[Guía de instalación y uso](docs/AURA-3.8.md)
+
+## Corrección del motor (3.7.1)
+
+La conversación se transmite como bytes UTF-8 exactos. El argumento de archivo de texto del motor eliminaba el salto final del prefijo de generación; ahora se usa la entrada binaria y se desactiva la interpretación de escapes para conservar también el código literal. Las cachés nuevas se separan por versión del transporte y por archivos del motor.
+
+La preparación incluye todas las variantes CPU oficiales, con selección automática. Se conservan x64 y SSE4.2 para procesadores antiguos. No se exige AVX ni GPU. La compatibilidad con la ruta sin AVX se comprueba por separado; todavía falta probar el i5 de primera generación físico.
+
+El instalador incluye el modelo ligero. Los modelos adicionales descargados se seleccionan desde Modelos; no se incluyen archivos parciales en el instalador.
 
 ## Creación de proyectos (3.7)
 
@@ -50,7 +68,7 @@ python -m venv .venv
 .venv\Scripts\python native_launcher.py
 ```
 
-La preparación descarga aproximadamente 1,2 GB desde los proveedores oficiales, comprueba sus SHA-256 y selecciona los componentes CPU sin AVX del motor. Después, conversación y dictado funcionan sin Internet. ElevenLabs es una opción en línea; la voz local depende de las voces instaladas de Windows.
+La preparación descarga aproximadamente 1,2 GB desde los proveedores oficiales, comprueba sus SHA-256 y incluye los componentes CPU oficiales con selección automática y respaldo sin AVX. Después, conversación y dictado funcionan sin Internet. ElevenLabs es una opción en línea; la voz local depende de las voces instaladas de Windows.
 
 Los datos se guardan en `%LOCALAPPDATA%\AURA_IA`. El motor no abre puertos. El modo de voz ElevenLabs sí envía el texto que se va a leer a ese servicio cuando el usuario lo activa.
 

@@ -1,0 +1,63 @@
+"""Compact conversation toolbar for model and response-depth selection."""
+from pathlib import Path
+import re
+from PySide6.QtCore import Signal,QSize,Qt
+from PySide6.QtGui import QActionGroup
+from PySide6.QtWidgets import QWidget,QHBoxLayout,QToolButton,QMenu,QStylePainter,QStyleOptionToolButton,QStyle
+
+LEVELS={'rapido':'Rápido','equilibrado':'Equilibrado','profundo':'Profundo'}
+
+def model_label(path):
+    name=Path(path).stem
+    if 'qwen2.5-coder-1.5b-instruct' in name.lower():return 'AURA Ligero · 1.5B'
+    if 'qwen2.5-coder-7b-instruct' in name.lower():
+        quant=re.search(r'q[2-8]',name.lower());return 'Qwen Coder · 7B'+(' · '+quant[0].upper() if quant else '')
+    return name[:48]
+
+class MenuButton(QToolButton):
+    compact_text=''
+    def minimumSizeHint(self):
+        hint=super().minimumSizeHint();return QSize(120,hint.height())
+    def sizeHint(self):
+        hint=super().sizeHint();return QSize(min(250,hint.width()),hint.height())
+    def paintEvent(self,event):
+        option=QStyleOptionToolButton();self.initStyleOption(option)
+        available=max(10,self.width()-38)
+        if self.compact_text and self.fontMetrics().horizontalAdvance(option.text)>available:option.text=self.compact_text
+        option.text=self.fontMetrics().elidedText(option.text,Qt.TextElideMode.ElideRight,available)
+        painter=QStylePainter(self);painter.drawComplexControl(QStyle.ComplexControl.CC_ToolButton,option)
+
+class ChatControls(QWidget):
+    model_requested=Signal(str)
+    browse_requested=Signal()
+    effort_requested=Signal(str)
+    settings_requested=Signal()
+
+    def __init__(self,parent=None):
+        super().__init__(parent)
+        self.setObjectName('chatControls')
+        row=QHBoxLayout(self);row.setContentsMargins(0,3,0,3);row.setSpacing(8)
+        self.model_button=MenuButton(self);self.model_button.setObjectName('chatModelButton');self.model_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);self.model_button.setMinimumWidth(120);self.model_button.setMaximumWidth(330)
+        self.model_menu=QMenu(self);self.model_button.setMenu(self.model_menu)
+        self.effort_button=MenuButton(self);self.effort_button.setObjectName('chatEffortButton');self.effort_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.effort_menu=QMenu(self);self.effort_button.setMenu(self.effort_menu)
+        self.effort_button.setToolTip('Rápido: respuesta breve. Profundo: pide una revisión más detallada y puede tardar más. No cambia las capacidades del modelo.')
+        self.settings_button=QToolButton(self);self.settings_button.setText('…');self.settings_button.setFixedWidth(38);self.settings_button.setStyleSheet('padding:5px;');self.settings_button.setToolTip('Contexto y ajustes de rendimiento');self.settings_button.setAccessibleName('Configuración y rendimiento');self.settings_button.clicked.connect(self.settings_requested.emit)
+        row.addWidget(self.model_button);row.addWidget(self.effort_button);row.addStretch(1);row.addWidget(self.settings_button)
+        self.setStyleSheet('QToolButton{color:#e4eaf4;background:#142238;border:1px solid #294563;border-radius:8px;padding:8px 18px 8px 10px;} QToolButton:hover{background:#213b59;} QToolButton:focus{border:1px solid #8bd2ff;} QToolButton:disabled{color:#a0b1c7;} QMenu{background:#102035;color:#edf4ff;border:1px solid #34506c;padding:5px;} QMenu::item{padding:9px 20px;} QMenu::item:selected{background:#23547a;color:white;}')
+
+    def refresh(self,current,paths,effort):
+        self.model_button.setText(model_label(current));self.model_button.setToolTip(str(current));self.model_menu.clear();
+        if hasattr(self,'models_group'):self.models_group.deleteLater()
+        self.models_group=QActionGroup(self.model_menu);self.models_group.setExclusive(True)
+        seen=set()
+        for path in [Path(current),*[Path(p) for p in paths]]:
+            key=str(path.resolve())
+            if key in seen or not path.is_file():continue
+            seen.add(key);action=self.model_menu.addAction(model_label(path));action.setCheckable(True);action.setChecked(path.resolve()==Path(current).resolve());action.setData(key);self.models_group.addAction(action);action.triggered.connect(lambda checked=False,value=key:self.model_requested.emit(value))
+        self.model_menu.addSeparator();self.model_menu.addAction('Buscar otro modelo en la PC…',self.browse_requested.emit)
+        self.effort_button.setText('Razonamiento · '+LEVELS[effort]);self.effort_button.compact_text='◌ '+LEVELS[effort];self.effort_button.setAccessibleName('Razonamiento: '+LEVELS[effort]);self.effort_menu.clear();
+        if hasattr(self,'effort_group'):self.effort_group.deleteLater()
+        self.effort_group=QActionGroup(self.effort_menu);self.effort_group.setExclusive(True)
+        for key,label in LEVELS.items():
+            action=self.effort_menu.addAction(label);action.setCheckable(True);action.setChecked(key==effort);action.setData(key);self.effort_group.addAction(action);action.triggered.connect(lambda checked=False,value=key:self.effort_requested.emit(value))

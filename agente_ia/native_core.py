@@ -55,7 +55,7 @@ class NativeOutputFilter:
 class NativeClient:
  def __init__(self,runtime,data,model=None):
   self.runtime=Path(runtime).resolve();self.data=Path(data).resolve();self.data.mkdir(parents=True,exist_ok=True)
-  self.model=Path(model or self.runtime/'modelos/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf');self.process=None;self.cancelled=threading.Event();self.first_text=None;self.lock=threading.Lock();self.auto_context=True;self.effective_context=None
+  self.model=Path(model or self.runtime/'modelos/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf').resolve();self.process=None;self.cancelled=threading.Event();self.first_text=None;self.lock=threading.Lock();self.auto_context=True;self.effective_context=None
  def stop(self):
   self.cancelled.set();p=self.process
   if p is not None and p.poll() is None:
@@ -73,9 +73,10 @@ class NativeClient:
   self.effective_context=effective
   if len(prompt)//2+96>=effective:raise ProviderError('Este texto supera el contexto disponible ('+str(effective)+' tokens). Conservé el historial: divide la especificación o usa un archivo con las partes necesarias. Puedes ajustar la barra de contexto; no es una cuota de uso.')
   budget=min(budget,max(32,effective-len(prompt)//2-64))
-  path=self.data/'turno.txt';path.write_text(prompt,'utf-8');log=(self.data/'motor-nativo.log').open('a',encoding='utf-8');start=time.monotonic();answer=''
-  args=[str(self.runtime/'motor/llama-completion.exe'),'-m',str(self.model),'-c',str(effective),'-t',str(settings.num_thread),'-tb',str(settings.num_thread),'-b','128','-ub','128','-ngl','0','--poll','0','--no-warmup','-no-cnv','--simple-io','--no-display-prompt','--color','off','--no-perf','--temp',str(settings.temperature),'-n',str(budget),'-f',str(path)]
-  cache_dir=self.data/'cache';cache_dir.mkdir(exist_ok=True);cache_key=hashlib.sha256((str(self.model.resolve())+str(self.model.stat().st_mtime_ns)+str(effective)).encode()).hexdigest()[:20];cache=cache_dir/(cache_key+'.bin')
+  path=self.data/'turno.txt';path.write_bytes(prompt.encode('utf-8'));log=(self.data/'motor-nativo.log').open('a',encoding='utf-8');start=time.monotonic();answer=''
+  batch=str(max(16,min(128,settings.num_batch)))
+  args=[str(self.runtime/'motor/llama-completion.exe'),'-m',str(self.model),'-c',str(effective),'-t',str(settings.num_thread),'-tb',str(settings.num_thread),'-b',batch,'-ub',batch,'-ngl','0','--poll','0','--no-warmup','-no-cnv','--simple-io','--no-display-prompt','--color','off','--no-perf','--temp',str(settings.temperature),'-n',str(budget),'--no-escape','-bf',str(path)]
+  cache_dir=self.data/'cache';cache_dir.mkdir(exist_ok=True);engine_signature=';'.join(f.name+':'+str(f.stat().st_mtime_ns)+':'+str(f.stat().st_size) for f in sorted((self.runtime/'motor').glob('*.dll')));cache_key=hashlib.sha256(('native-prompt-v2|'+engine_signature+str(self.model.resolve())+str(self.model.stat().st_mtime_ns)+str(effective)).encode()).hexdigest()[:20];cache=cache_dir/(cache_key+'.bin')
   if use_cache:args+=['--prompt-cache',str(cache),'--prompt-cache-all']
   decoder=codecs.getincrementaldecoder('utf-8')('replace');output_filter=NativeOutputFilter()
   try:

@@ -4,7 +4,7 @@ import os,re,shutil,sys,uuid
 from pathlib import Path
 from PySide6.QtCore import Qt,Signal,QProcess,QProcessEnvironment,QTimer
 from PySide6.QtGui import QFont,QSyntaxHighlighter,QTextCharFormat,QColor
-from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLabel,QSplitter,QTreeView,QFileSystemModel,QTabWidget,QPlainTextEdit,QInputDialog,QMessageBox,QDialog,QDialogButtonBox,QMenu
+from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLabel,QSplitter,QTreeView,QFileSystemModel,QTabWidget,QPlainTextEdit,QInputDialog,QMessageBox,QDialog,QDialogButtonBox,QMenu,QToolBar
 from .workspace import SafeWorkspace,compute_file_hash,build_diff,WorkspaceError
 
 class CodeColors(QSyntaxHighlighter):
@@ -21,17 +21,17 @@ class AuraxWorkspace(QWidget):
  attach_requested=Signal(str)
  def __init__(self,owner,runtime):
   super().__init__();self.owner=owner;self.runtime=Path(runtime);self.workspace=SafeWorkspace(owner.store.get_settings().workspace_path);self.process=QProcess(self);self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels);self.process.readyReadStandardOutput.connect(self.read_output);self.process.finished.connect(self.finished);self.process.errorOccurred.connect(lambda error:self.console.appendPlainText('No se pudo ejecutar el proceso: '+self.process.errorString()));self.timeout=QTimer(self);self.timeout.setSingleShot(True);self.timeout.timeout.connect(self.stop_process);self.web_url=None;self.web_preview=None;self.web_preview_opened=False
-  layout=QVBoxLayout(self);layout.setContentsMargins(8,8,8,8);title=QLabel('AURAX · Codificador');title.setFont(QFont('Segoe UI',15,QFont.Weight.Bold));titlebar=QHBoxLayout();titlebar.addWidget(title,1);import_code=QPushButton('Revisar código IA');import_code.clicked.connect(self.import_response);titlebar.addWidget(import_code);layout.addLayout(titlebar);self.path_label=QLabel(str(self.workspace.root));self.path_label.setWordWrap(True);layout.addWidget(self.path_label)
-  toolbar=QHBoxLayout()
+  layout=QVBoxLayout(self);layout.setContentsMargins(8,8,8,8);title=QLabel('AURAX');title.setFont(QFont('Segoe UI',15,QFont.Weight.Bold));titlebar=QHBoxLayout();titlebar.addWidget(title,1);import_code=QPushButton('Revisar respuesta');import_code.clicked.connect(self.import_response);titlebar.addWidget(import_code);layout.addLayout(titlebar);self.path_label=QLabel(str(self.workspace.root));self.path_label.setWordWrap(True);layout.addWidget(self.path_label)
+  toolbar=QToolBar();toolbar.setMovable(False);toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly);self.file_toolbar=toolbar
   for text,fn in [('Proyecto',owner.project),('Nuevo',self.new_menu),('Guardar',self.save_current),('Adjuntar a AURAX',self.attach),('Proyecto web',self.web_menu)]:
-   button=QPushButton(text);button.clicked.connect(fn);toolbar.addWidget(button)
-  layout.addLayout(toolbar);split=QSplitter();self.model=QFileSystemModel(self);self.model.setRootPath(str(self.workspace.root));self.tree=QTreeView();self.tree.setModel(self.model);self.tree.setHeaderHidden(True);self.tree.setRootIndex(self.model.index(str(self.workspace.root)));self.tree.doubleClicked.connect(lambda index:self.open_path(self.model.filePath(index)))
+   toolbar.addAction(text,fn)
+  layout.addWidget(toolbar);split=QSplitter();self.model=QFileSystemModel(self);self.model.setRootPath(str(self.workspace.root));self.tree=QTreeView();self.tree.setModel(self.model);self.tree.setHeaderHidden(True);self.tree.setRootIndex(self.model.index(str(self.workspace.root)));self.tree.doubleClicked.connect(lambda index:self.open_path(self.model.filePath(index)))
   for column in (1,2,3):self.tree.hideColumn(column)
   self.tabs=QTabWidget();self.tabs.setTabsClosable(True);self.tabs.tabCloseRequested.connect(self.close_tab);split.addWidget(self.tree);split.addWidget(self.tabs);split.setSizes([150,420]);layout.addWidget(split,1)
-  row=QHBoxLayout()
+  row=QToolBar();row.setMovable(False);row.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly);self.run_toolbar=row
   for text,kind in [('Verificar','check'),('Ejecutar','run'),('Compilar','build'),('Crear instalador','installer')]:
-   button=QPushButton(text);button.clicked.connect(lambda checked=False,kind=kind:self.run(kind));row.addWidget(button)
-  stop=QPushButton('Detener');stop.clicked.connect(self.stop_process);row.addWidget(stop);layout.addLayout(row)
+   row.addAction(text,lambda checked=False,kind=kind:self.run(kind))
+  row.addAction('Detener',self.stop_process);layout.addWidget(row)
   self.console=QPlainTextEdit();self.console.setReadOnly(True);self.console.setMaximumBlockCount(1500);self.console.setMaximumHeight(175);self.console.setPlaceholderText('Consola de AURAX: aquí aparecen comandos, errores y resultados reales.');self.console.setFont(QFont('Consolas',10));self.console.setStyleSheet('font-family:Consolas;font-size:12px;');layout.addWidget(self.console)
  def message(self,text):QMessageBox.warning(self,'AURAX',str(text))
  def set_project(self,path):

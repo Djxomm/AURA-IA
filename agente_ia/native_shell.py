@@ -47,7 +47,7 @@ def build_shell(w,assets):
     local.setMenu(local_menu);sl.addWidget(local)
     right=QWidget();right.setObjectName('chatArea');rl=QVBoxLayout(right);rl.setContentsMargins(12,14,12,8);rl.setSpacing(8)
     top=QHBoxLayout();w.heading=QLabel('Nueva conversación');w.heading.setObjectName('chatTitle');w.heading.setMinimumWidth(0);w.heading.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred);top.addWidget(w.heading,1)
-    w.mode=QComboBox();w.mode.addItems(['Conversación','AURAX · Programación']);w.mode.setMaximumWidth(195);top.addWidget(w.mode);w.temporary=QCheckBox('Temporal');w.temporary.setToolTip('Sin historial ni memoria.');top.addWidget(w.temporary);rl.addLayout(top)
+    w.mode=QComboBox();w.mode.addItems(['Conversación','AURAX · Programación']);w.mode.setMaximumWidth(175);top.addWidget(w.mode);w.autonomous=QCheckBox('Autónomo');w.autonomous.setToolTip('Modo constructor y reparador: aplica cambios en el proyecto, ejecuta pruebas y compila automáticamente (todo queda en historial para deshacer).');w.autonomous.setChecked(bool(w.store.get_settings().autonomous_mode));top.addWidget(w.autonomous);w.temporary=QCheckBox('Temporal');w.temporary.setToolTip('Sin historial ni memoria.');top.addWidget(w.temporary);rl.addLayout(top)
     w.status=QLabel('Preparando AURA…');w.status.setObjectName('status');w.status.setWordWrap(True);rl.addWidget(w.status)
     w.chat=ChatView();w.chat.setObjectName('conversation');w.chat.setMaximumWidth(820);chat_row=QHBoxLayout();chat_row.addStretch(1);chat_row.addWidget(w.chat,10);chat_row.addStretch(1);rl.addLayout(chat_row,1)
     composer=QWidget();composer.setObjectName('composer');composer.setMaximumWidth(620);cl=QVBoxLayout(composer);cl.setContentsMargins(6,2,6,2);cl.setSpacing(0)

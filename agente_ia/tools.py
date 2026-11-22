@@ -18,6 +18,8 @@ READ_TOOLS: set[str] = {
     "get_file_info",
 }
 WRITE_TOOLS: set[str] = {"create_file", "edit_file", "write_file", "delete_file"}
+EXEC_TOOLS: set[str] = {"run_project_action", "run_command"}
+ALL_TOOLS: set[str] = READ_TOOLS | WRITE_TOOLS | EXEC_TOOLS
 
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -191,6 +193,45 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_project_action",
+            "description": "Verifica sintaxis (check), ejecuta pruebas (test), compila (build) o ejecuta (run) el proyecto actual y devuelve el código de salida y salida real.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["check", "test", "build", "run"],
+                        "description": "Acción real a ejecutar: check, test, build o run.",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Ruta relativa opcional del archivo objetivo dentro del workspace.",
+                    },
+                    "reason": {"type": "string", "description": "Motivo breve de la ejecución."},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_command",
+            "description": "Ejecuta un comando de desarrollo dentro de la carpeta del proyecto (ej. pytest, py_compile, npm run build, g++) y devuelve el código de salida y consola real.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Comando a ejecutar dentro del workspace."},
+                    "timeout": {"type": "integer", "description": "Tiempo límite en segundos (5 a 300, por defecto 120)."},
+                    "reason": {"type": "string", "description": "Motivo breve del comando."},
+                },
+                "required": ["command"],
+            },
+        },
+    },
 ]
 
 
@@ -205,7 +246,9 @@ COMPACT_TOOL_SUMMARY = (
     "- create_file(path, content, reason)\n"
     "- edit_file(path, old_text, new_text, reason)\n"
     "- write_file(path, content, reason)\n"
-    "- delete_file(path, reason)"
+    "- delete_file(path, reason)\n"
+    "- run_project_action(action: check|test|build|run, path?, reason?)\n"
+    "- run_command(command, timeout?, reason?)"
 )
 
 
@@ -214,30 +257,45 @@ def build_system_prompt(
     *,
     include_xml_protocol: bool = False,
     compact: bool = True,
+    autonomous: bool = False,
 ) -> str:
     """Construye el prompt del sistema adaptado a modelos locales pequeños o estándar."""
-    if compact:
+    if autonomous:
+        base = (
+            "Eres AURA Inteligencia Artificial en modo constructor y reparador autónomo en español.\n"
+            f"Workspace actual: {workspace_path}\n"
+            "Actúas como ingeniera constructora y reparadora directa, NO como consultora pasiva.\n"
+            "Reglas estrictas:\n"
+            "1. Inspecciona primero el proyecto real (list_files, search_in_files, read_file); nunca inventes rutas ni código.\n"
+            "2. Aplica los cambios directamente con edit_file o create_file sin pedirle al usuario que copie código ni ejecute pasos manuales.\n"
+            "3. Verifica, prueba y compila tú misma con run_project_action(action='check'|'test'|'build'|'run') o run_command(command).\n"
+            "4. Si una prueba o compilación falla (código != 0), lee el error real, corrige el código y vuelve a probar hasta lograr código 0.\n"
+            "5. Reporta solo resultados reales ejecutados; nunca inventes salidas ni afirmes éxito sin verificación."
+        )
+    elif compact:
         base = (
             "Eres AURA Inteligencia Artificial, un agente de programación en español.\n"
             f"Workspace actual: {workspace_path}\n"
             "Reglas:\n"
             "1. Lee o busca archivos reales antes de editar; no inventes rutas ni código.\n"
             "2. Prefiere edit_file sobre write_file para cambios puntuales.\n"
-            "3. Todo cambio en archivos requiere aprobación del usuario mediante diff.\n"
+            "3. Todo cambio en archivos o comando requiere aprobación del usuario; usa run_project_action o run_command para verificar, probar y compilar.\n"
             "4. Sé claro, breve y directo."
         )
     else:
         base = (
-            "Eres AURA Inteligencia Artificial, un agente experto en análisis y edición de código que responde en español.\n"
+            "Eres AURA Inteligencia Artificial, un agente experto en análisis, construcción, reparación y compilación de código que responde en español.\n"
             f"Carpeta de trabajo (workspace): {workspace_path}\n"
             "Reglas estrictas:\n"
             "1. Inspecciona el proyecto con list_files, search_in_files o read_file antes de proponer cambios.\n"
             "2. Nunca inventes rutas, funciones o contenido de archivos que no hayas leído.\n"
             "3. Usa edit_file con contexto exacto y único siempre que modifiques un archivo existente; "
             "usa create_file para archivos nuevos y delete_file solo si el usuario lo pide.\n"
-            "4. Cada modificación genera una vista previa diff que el usuario aprobará o rechazará; "
+            "4. Usa run_project_action (check, test, build, run) o run_command para comprobar, probar y compilar; "
+            "si falla, lee el error real y corrige el archivo hasta resolverlo.\n"
+            "5. Cada modificación genera una vista previa diff que el usuario aprobará o rechazará; "
             "si la rechaza con comentario, corrige tu propuesta según sus indicaciones.\n"
-            "5. Explica tus cambios de forma concisa y precisa."
+            "6. Explica tus cambios y resultados reales de forma concisa y precisa."
         )
 
     if include_xml_protocol:
@@ -308,7 +366,7 @@ def parse_xml_tool_calls(text: str) -> tuple[str, list[dict[str, Any]]]:
         fenced = re.fullmatch(r"\s*```json\s*(\{.*\})\s*```\s*", text, re.DOTALL | re.IGNORECASE)
         if fenced:
             obj = _try_parse_json_obj(fenced.group(1))
-            if obj and set(obj) <= {"name", "arguments"} and obj.get("name") in READ_TOOLS | WRITE_TOOLS and isinstance(obj.get("arguments"), dict):
+            if obj and set(obj) <= {"name", "arguments"} and obj.get("name") in ALL_TOOLS and isinstance(obj.get("arguments"), dict):
                 return "", [{"id": "json_" + uuid.uuid4().hex[:10], "name": obj["name"], "arguments": obj["arguments"]}]
         # Qwen2.5 models encode <tool_call>/</tool_call> as special tokens that llama-cli
         # hides by default, leaving a leading bare JSON tool object. Accept only an
@@ -322,7 +380,7 @@ def parse_xml_tool_calls(text: str) -> tuple[str, list[dict[str, Any]]]:
             if (
                 isinstance(obj, dict)
                 and set(obj) <= {"name", "arguments"}
-                and obj.get("name") in READ_TOOLS | WRITE_TOOLS
+                and obj.get("name") in ALL_TOOLS
                 and isinstance(obj.get("arguments"), dict)
             ):
                 return "", [{"id": "json_" + uuid.uuid4().hex[:10], "name": obj["name"], "arguments": obj["arguments"]}]

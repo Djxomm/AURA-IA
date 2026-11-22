@@ -19,6 +19,8 @@ def model_label(path):
             gname=str(model_info(p).get('general.name') or '').strip()
             if gname and gname.lower() not in {'merged','model','unknown'}:return gname[:48]
         except (OSError,ValueError):pass
+    if 'aura-angel-5.6' in low:return 'AURA - ANGEL 5.6'
+    if 'aura-lumen-2.0ib_v2' in low:return 'AURA - Lumen 2.0IB_V2'
     if 'aura-lumen-2.0ib_v1' in low:return 'AURA - Lumen 2.0IB_V1'
     match=re.search(r'qwen(2(?:\.5)?)(-coder)?-([0-9._]+b)-instruct',low)
     if match:
@@ -57,17 +59,30 @@ class ChatControls(QWidget):
         self.effort_button.setToolTip('Rápido: respuesta breve. Profundo: pide una revisión más detallada y puede tardar más. No cambia las capacidades del modelo.')
         self.settings_button=QToolButton(self);self.settings_button.setText('…');self.settings_button.setFixedWidth(38);self.settings_button.setStyleSheet('padding:5px;');self.settings_button.setToolTip('Contexto y ajustes de rendimiento');self.settings_button.setAccessibleName('Configuración y rendimiento');self.settings_button.clicked.connect(self.settings_requested.emit)
         row.addWidget(self.model_button);row.addWidget(self.effort_button);row.addStretch(1);row.addWidget(self.settings_button)
-        self.setStyleSheet('QToolButton{color:#e4eaf4;background:#142238;border:1px solid #294563;border-radius:8px;padding:8px 18px 8px 10px;} QToolButton:hover{background:#213b59;} QToolButton:focus{border:1px solid #8bd2ff;} QToolButton:disabled{color:#a0b1c7;} QMenu{background:#102035;color:#edf4ff;border:1px solid #34506c;padding:5px;} QMenu::item{padding:9px 20px;} QMenu::item:selected{background:#23547a;color:white;}')
+        self.setStyleSheet('QToolButton{color:#e4eaf4;background:#142238;border:1px solid #294563;border-radius:8px;padding:8px 18px 8px 10px;} QToolButton:hover{background:#213b59;} QToolButton:focus{border:1px solid #8bd2ff;} QToolButton:disabled{color:#a0b1c7;} QMenu{background:#102035;color:#edf4ff;border:1px solid #34506c;padding:5px;} QMenu::item{padding:8px 20px;} QMenu::item:selected{background:#23547a;color:white;} QMenu::separator{height:1px;background:#294563;margin:6px 10px;}')
 
     def refresh(self,current,paths,effort):
+        from .model_library import model_skill_profile
         self.model_button.setText(model_label(current));self.model_button.setToolTip(str(current));self.model_menu.clear();
         if hasattr(self,'models_group'):self.models_group.deleteLater()
         self.models_group=QActionGroup(self.model_menu);self.models_group.setExclusive(True)
-        seen=set()
+        seen=set();grouped={};order=[]
+        cur_resolved=Path(current).resolve()
         for path in [Path(current),*[Path(p) for p in paths]]:
-            key=str(path.resolve())
-            if key in seen or not path.is_file():continue
-            seen.add(key);action=self.model_menu.addAction(model_label(path));action.setCheckable(True);action.setChecked(path.resolve()==Path(current).resolve());action.setData(key);self.models_group.addAction(action);action.triggered.connect(lambda checked=False,value=key:self.model_requested.emit(value))
+            if not path.is_file():continue
+            resolved=path.resolve();key=str(resolved)
+            if key in seen:continue
+            seen.add(key);prof=model_skill_profile(resolved);cat=prof['category']
+            if cat not in grouped:grouped[cat]=[];order.append(cat)
+            grouped[cat].append((resolved,prof))
+        for cat in order:
+            self.model_menu.addSection(cat)
+            for resolved,prof in grouped[cat]:
+                label=model_label(resolved);skills=prof.get('skills','')
+                text=f'{label} · {skills}' if skills and prof.get('proven') else label
+                action=self.model_menu.addAction(text);action.setCheckable(True);action.setChecked(resolved==cur_resolved);action.setData(str(resolved))
+                if skills:action.setToolTip(f'{label}\nHabilidades: {skills}\n{resolved}')
+                self.models_group.addAction(action);action.triggered.connect(lambda checked=False,value=str(resolved):self.model_requested.emit(value))
         self.model_menu.addSeparator();self.model_menu.addAction('Buscar otro modelo en la PC…',self.browse_requested.emit)
         self.effort_button.setText('Razonamiento · '+LEVELS[effort]);self.effort_button.compact_text='◌ '+LEVELS[effort];self.effort_button.setAccessibleName('Razonamiento: '+LEVELS[effort]);self.effort_menu.clear();
         if hasattr(self,'effort_group'):self.effort_group.deleteLater()

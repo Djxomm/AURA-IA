@@ -161,6 +161,7 @@ class AppSettings(BaseModel):
     max_steps: int = Field(default=6, ge=1, le=25)
     compact_prompt: bool = True
     tool_mode: ToolModeName = "auto"
+    autonomous_mode: bool = False
 
 
 def apply_hardware_profile(

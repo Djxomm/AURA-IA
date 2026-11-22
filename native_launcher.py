@@ -81,7 +81,16 @@ class Window(QMainWindow):
   self.audio=QAudioOutput();self.player=QMediaPlayer();self.player.setAudioOutput(self.audio);self.audio.setVolume(self.prefs.get('volume',90)/100)
   self.floating=FloatingAssistant(self)
   self.new_chat();self.refresh_history();self.timer=QTimer(self);self.timer.timeout.connect(self.progress);self.timer.start(300)
-  self.startup=None;self.startup_finished=False;self.attached_files=[];self.aurax=None;self.aurax_dock=None;self.mode.currentIndexChanged.connect(lambda index:self.open_aurax() if index==1 else None)
+  self.startup=None;self.startup_finished=False;self.attached_files=[];self.aurax=None;self.aurax_dock=None;self.mode.currentIndexChanged.connect(lambda index:self.open_aurax() if index==1 else None);self.autonomous.toggled.connect(self.toggle_autonomous)
+ def toggle_autonomous(self,enabled):
+  s=self.store.get_settings()
+  if bool(s.autonomous_mode)!=bool(enabled):self.store.save_settings(s.model_copy(update={'autonomous_mode':bool(enabled)}))
+  if enabled and not self.busy:
+   self.temporary.setChecked(False)
+   if self.mode.currentIndex()!=1:self.open_aurax()
+   self.status.setText('Modo constructor autónomo activo · edita, prueba y compila dentro del proyecto')
+  elif not enabled and not self.busy:
+   self.status.setText('Modo revisión manual activo · pide aprobación antes de cada cambio o comando')
  def open_archives(self):
   from agente_ia.archive_tools import open_dialog
   open_dialog(self)
@@ -101,11 +110,13 @@ class Window(QMainWindow):
  def open_aurax(self):
   if not self.busy and not self.warming and not self.prefs.get('coder_profile_initialized',False):
    from agente_ia.hardware_profile import hardware_info
+   from agente_ia.model_library import curate_proven_models,discover
    machine=hardware_info()
    if (machine.get('ram_gib') or 0)>=15 and machine.get('cores',1)>=4 and '1.5b' in self.client.model.name.lower():
-    candidates=[ROOT/'modelos/qwen2.5-coder-7b-instruct-q4_k_m.gguf']+[Path(p) for p in self.prefs.get('models',[]) if isinstance(p,str)]
-    selected=next((p for p in candidates if '7b-instruct-q4_k_m' in p.name.lower() and p.is_file() and p.stat().st_size==4683073536),None)
-    if selected:self.select_model(selected)
+    raw=[*(ROOT/'modelos').glob('*.gguf'),*[Path(p) for p in self.prefs.get('models',[]) if isinstance(p,str)],*discover(self.prefs.get('model_directories',['D:/IA/Modelos_AURA']))]
+    curated=curate_proven_models(raw,extra_runs_dirs=[Path(d) for d in self.prefs.get('model_runs_dirs',[]) if isinstance(d,str)])
+    preferred=next((p for p in curated if '1.5b' not in p.name.lower()),None)
+    if preferred:self.select_model(preferred)
    self.save_pref('coder_profile_initialized',True)
 
   if (ROOT/'skills/multilenguaje/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','multilenguaje')
@@ -200,9 +211,11 @@ class Window(QMainWindow):
   from agente_ia.project_actions import requested_actions,ProjectRunner
   actions=requested_actions(text)
   recent=self.store.get_messages(self.sid,limit=60) if self.sid else []
-  if not self.temporary.isChecked() and (actions or file_task_requested(text,recent)):self.open_aurax()
-  if self.temporary.isChecked() and (self.mode.currentIndex()==1 or actions):self.error('El modo temporal es solo conversación. Desactívalo para trabajar sobre archivos.');return
+  auto_on=bool(getattr(self,'autonomous',None) and self.autonomous.isChecked())
+  if not self.temporary.isChecked() and (actions or auto_on or file_task_requested(text,recent)):self.open_aurax()
+  if self.temporary.isChecked() and (self.mode.currentIndex()==1 or actions or auto_on):self.error('El modo temporal es solo conversación. Desactívalo para trabajar sobre archivos.');return
   settings=self.store.get_settings();project=settings.workspace_path
+  if auto_on and not settings.autonomous_mode:settings=settings.model_copy(update={'autonomous_mode':True})
   if self.mode.currentIndex()==1:
    from agente_ia.model_library import programming_settings
    settings=programming_settings(settings,self.prefs.get('stable_code',True))
@@ -258,8 +271,19 @@ class Window(QMainWindow):
       while not reply['event'].wait(.1):
        if self.client.cancelled.is_set():return ApprovalDecision(False,'Detenido')
       return ApprovalDecision(reply['approved'])
+     async def run_autonomous_turn():
+      cancel_ev=asyncio.Event()
+      async def watch_cancel():
+       while not cancel_ev.is_set():
+        if self.client.cancelled.is_set():cancel_ev.set();return
+        await asyncio.sleep(.15)
+      watcher=asyncio.create_task(watch_cancel())
+      try:
+       return await self.engine.run_turn(session_id=sid,user_message=text,reference_context=context,settings=settings,attached_files=attachments,emit=emit,approval_handler=approve,cancel_event=cancel_ev)
+      finally:
+       cancel_ev.set();watcher.cancel()
      # Keep the user's original task in history; memory is supplied as attached user context.
-     result=asyncio.run(self.engine.run_turn(session_id=sid,user_message=text,reference_context=context,settings=settings,attached_files=attachments,emit=emit,approval_handler=approve))
+     result=asyncio.run(run_autonomous_turn())
      if result.get('status') not in ('completed','done','success') and not result.get('content'):raise RuntimeError(result.get('error','No se completó la tarea.'))
      self.bus.event.emit('done',result.get('content',self.answer))
     else:
@@ -293,6 +317,8 @@ class Window(QMainWindow):
     if self.aurax is not None and (self.aurax.tabs.currentWidget() is None or Path(payload.get('file_path','')).name in {'index.html','main.py'}):self.aurax.open_path(str(self.aurax.workspace.resolve_safe_path(payload['file_path'])))
    elif event in ('tool_start','tool_result'):
     if self.aurax is not None:self.aurax.console.appendPlainText(payload.get('summary') or payload.get('name') or event)
+   elif event=='command_output':
+    if self.aurax is not None:self.aurax.console.appendPlainText(str(payload.get('line','')))
    elif event=='error':self.status.setText(payload.get('message','Error'))
    elif event=='done':self.answer=payload.get('content',self.answer)
   elif kind in ('done','failed'):
@@ -305,7 +331,7 @@ class Window(QMainWindow):
     if self.aurax is not None:self.aurax.console.appendPlainText(summary)
    if kind=='done' and self.auto_voice.isChecked():self.speak()
   elif kind=='approval':
-   self.floating.set_attention('Revisa el cambio propuesto.');p=data['proposal'];d,l=self.dialog('Revisar cambio · '+p.file_path);l.addWidget(QLabel(p.reason));view=QPlainTextEdit(p.unified_diff or p.proposed_content or 'Eliminar archivo');view.setReadOnly(True);l.addWidget(view);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Yes|QDialogButtonBox.StandardButton.No);buttons.accepted.connect(d.accept);buttons.rejected.connect(d.reject);l.addWidget(buttons);data['approved']=d.exec()==QDialog.DialogCode.Accepted;data['event'].set();self.floating.set_attention('')
+   p=data['proposal'];is_exec=p.action=='exec';self.floating.set_attention('Autoriza el comando propuesto.' if is_exec else 'Revisa el cambio propuesto.');d,l=self.dialog(('Autorizar comando · ' if is_exec else 'Revisar cambio · ')+p.file_path);l.addWidget(QLabel(p.reason));view=QPlainTextEdit(p.unified_diff or p.proposed_content or 'Eliminar archivo');view.setReadOnly(True);l.addWidget(view);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Yes|QDialogButtonBox.StandardButton.No);buttons.accepted.connect(d.accept);buttons.rejected.connect(d.reject);l.addWidget(buttons);data['approved']=d.exec()==QDialog.DialogCode.Accepted;data['event'].set();self.floating.set_attention('')
   elif kind=='dictated':self.dictating=False;self.mic.setToolTip('● Dictar');self.input.setPlainText(data);self.status.setText('Dictado listo. Corrige el texto y pulsa Enviar.')
   elif kind=='voice_ready':self.player.setSource(QUrl.fromLocalFile(str(data)));self.player.play();self.status.setText('Hablando · Detener corta el audio')
   elif kind=='voice_fallback':self.status.setText(data)
@@ -324,10 +350,10 @@ class Window(QMainWindow):
  def refresh_chat_controls(self):
   paths=sorted((ROOT/'modelos').glob('*.gguf'));registered=self.prefs.get('models',[])
   if isinstance(registered,list):paths.extend(Path(p) for p in registered if isinstance(p,str))
-  from agente_ia.model_library import discover
-  paths.extend((ROOT/'modelos').glob('*.gguf'))
-  paths.extend(discover(self.prefs.get('model_directories',['D:/IA/Modelos_AURA','D:/IA/Modelos_AURA/OpenAI'])))
-  self.chat_controls.refresh(self.client.model,paths,self.store.get_settings().thinking_effort)
+  from agente_ia.model_library import curate_proven_models,discover
+  paths.extend(discover(self.prefs.get('model_directories',['D:/IA/Modelos_AURA'])))
+  curated=curate_proven_models(paths,current=self.client.model,extra_runs_dirs=[Path(d) for d in self.prefs.get('model_runs_dirs',[]) if isinstance(d,str)])
+  self.chat_controls.refresh(self.client.model,curated,self.store.get_settings().thinking_effort)
  def select_effort(self,value):
   if self.guarded():self.refresh_chat_controls();return
   self.store.save_settings(self.store.get_settings().model_copy(update={'thinking_effort':value}));self.refresh_chat_controls()

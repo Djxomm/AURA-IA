@@ -44,7 +44,8 @@ class SettingsHub(QDialog):
         projects=page('Proyecto y habilidades','El proyecto define la carpeta donde AURAX puede trabajar. Las habilidades añaden instrucciones para sus tareas.')
         for text,callback in [('Cambiar carpeta del proyecto…',owner.project),('Administrar habilidades…',owner.skills_panel)]:
             b=QPushButton(text);b.clicked.connect(lambda checked=False,cb=callback:self.launch(cb));projects.addRow(b)
-        security=page('Cambios y seguridad','AURAX pide revisar los cambios antes de escribir archivos. Los comandos requieren autorización. Puedes consultar y deshacer cambios aplicados.')
+        security=page('Cambios y seguridad','AURAX pide revisar los cambios antes de escribir archivos salvo que actives el modo constructor autónomo. Todo cambio aplicado queda registrado para deshacerlo.')
+        self.autonomous=QCheckBox('Modo constructor autónomo: editar, probar y compilar automáticamente dentro del proyecto');self.autonomous.setChecked(bool(s.autonomous_mode));security.addRow(self.autonomous)
         b=QPushButton('Revisar cambios y deshacer…');b.clicked.connect(lambda:self.launch(owner.changes));security.addRow(b)
         self.sections.currentRowChanged.connect(self.stack.setCurrentIndex);self.sections.setCurrentRow(0)
         search.textChanged.connect(lambda text:[self.sections.item(i).setHidden(text.lower() not in self.sections.item(i).text().lower()) for i in range(self.sections.count())])
@@ -63,7 +64,8 @@ class SettingsHub(QDialog):
         values=recommended_settings(self.hardware);self.threads.setValue(values['num_thread']);self.context.setValue(self.context_profile['recommended']);self.length.setValue(values['max_predict_tokens']);self.temperature.setValue(.2);self.stable_code.setChecked(True)
 
     def apply(self):
-        w=self.owner;s=w.store.get_settings();w.store.save_settings(s.model_copy(update={'thinking_effort':self.effort.currentData(),'max_predict_tokens':self.length.value(),'num_ctx':self.context.value(),'num_thread':self.threads.value(),'temperature':self.temperature.value(),'tool_mode':'xml','num_batch':64}))
+        w=self.owner;s=w.store.get_settings();w.store.save_settings(s.model_copy(update={'thinking_effort':self.effort.currentData(),'max_predict_tokens':self.length.value(),'num_ctx':self.context.value(),'num_thread':self.threads.value(),'temperature':self.temperature.value(),'tool_mode':'xml','num_batch':64,'autonomous_mode':self.autonomous.isChecked()}))
+        if hasattr(w,'autonomous'):w.autonomous.setChecked(self.autonomous.isChecked())
         w.save_pref('stable_code',self.stable_code.isChecked())
         w.client.acceleration=self.accelerator.currentData();w.save_pref("acceleration",w.client.acceleration)
         w.client.auto_context=self.automatic.isChecked();w.save_pref('auto_context',self.automatic.isChecked());w.save_pref('intro',self.intro.isChecked());w.save_pref('floating',self.floating.isChecked());w.save_pref('animations',self.motion.isChecked());w.auto_voice.setChecked(self.autovoice.isChecked());w.floating.setVisible(self.floating.isChecked());w.refresh_chat_controls();self.accept()

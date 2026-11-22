@@ -17,6 +17,7 @@ def requested_actions(text):
     verbs=r'\b(compila(?:r(?:lo)?|lo)?|ejecuta(?:r(?:lo)?|lo)?|corre|prueba(?:lo)?|probemos|probamos|provamos|verifica(?:lo)?)\b'
     if not re.match(verbs,value):return []
     if re.search(r'\b(?:no compiles|sin ejecutar|explica|como compilar|primero modifica|primero corrige)\b',value):return []
+    if re.search(r'\b(?:corrige|corregir|repara|reparar|arregla|arreglar|modifica|modificar|edita|editar|crea|crear|agrega|agregar|anade|anadir|cambia|cambiar|mejora|mejorar|refactoriza)\b',value):return []
     actions=[]
     for match in re.finditer(verbs,value):
         word=match[1]

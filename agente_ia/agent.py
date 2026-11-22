@@ -15,7 +15,7 @@ from .config import AppSettings
 from .providers import LocalLLMClient, ProviderError, ToolCall, ProviderResponse
 from .skills import SkillStore
 from .storage import Storage
-from .tools import READ_TOOLS, TOOL_DEFINITIONS, WRITE_TOOLS, build_system_prompt, estimate_tokens
+from .tools import EXEC_TOOLS, READ_TOOLS, TOOL_DEFINITIONS, WRITE_TOOLS, build_system_prompt, estimate_tokens
 from .workspace import SafeWorkspace, WorkspaceError
 
 
@@ -432,6 +432,7 @@ class AgentEngine:
             str(workspace.root),
             include_xml_protocol=(settings.tool_mode == "xml"),
             compact=settings.compact_prompt,
+            autonomous=settings.autonomous_mode,
         )
         from .aura_api import effort_instruction
         from .skills import max_enabled_for_context
@@ -453,7 +454,10 @@ class AgentEngine:
                     pass
 
         if creating:
-            system_prompt += '\nEl usuario pide archivos reales. Respeta la última elección de lenguaje. No entregues solo ideas, ejemplos ni marcadores pendientes. Usa create_file/write_file con archivos completos; la interfaz pedirá aprobación. Nunca digas que ejecutaste o compilaste si no hubo una herramienta que lo hiciera. Para un juego HTML sencillo prefiere un index.html autocontenido.'
+            if settings.autonomous_mode:
+                system_prompt += '\nEl usuario pide construir o reparar archivos reales en modo autónomo. Respeta la última elección de lenguaje. Usa create_file/edit_file/write_file con archivos completos y luego verifica, prueba o compila con run_project_action o run_command; si hay error, corrígelo y vuelve a probar hasta lograr salida 0. Nunca afirmes éxito sin salida real.'
+            else:
+                system_prompt += '\nEl usuario pide archivos reales. Respeta la última elección de lenguaje. No entregues solo ideas, ejemplos ni marcadores pendientes. Usa create_file/write_file con archivos completos; la interfaz pedirá aprobación. Nunca digas que ejecutaste o compilaste si no hubo una herramienta que lo hiciera. Para un juego HTML sencillo prefiere un index.html autocontenido.'
             if brief.strip() != user_message.strip():
                 system_prompt += '\nEspecificación vigente:\n'+brief
             import re
@@ -477,9 +481,11 @@ class AgentEngine:
         last_tok_per_sec = 0.0
         last_mode = settings.tool_mode
         tool_traces: list[dict[str, Any]] = []
+        executed_actions: list[dict[str, Any]] = []
         final_content = ""
+        effective_max_steps = max(settings.max_steps, 16) if settings.autonomous_mode else settings.max_steps
 
-        for step in range(1, settings.max_steps + 1):
+        for step in range(1, effective_max_steps + 1):
             if creating and declined:
                 message = 'No apliqué cambios: rechazaste la propuesta.'
                 self.storage.add_message(session_id, 'assistant', message, metadata={'tools':tool_traces})
@@ -548,7 +554,7 @@ class AgentEngine:
                     response.tool_calls = [ToolCall(id='artifact_'+uuid.uuid4().hex[:10], name=name, arguments=arguments)]
                     await _emit(emit, 'stream_clean', {'content':'Preparando el archivo completo para tu revisión.', 'step':step})
                 except (ValueError, SyntaxError, OSError, subprocess.TimeoutExpired) as error:
-                    if retries < 2 and step < settings.max_steps:
+                    if retries < 2 and step < effective_max_steps:
                         retries += 1
                         await _emit(emit, 'stream_clean', {'content':'La respuesta no produjo un archivo completo. Reintentando la creación ('+str(retries)+'/2).', 'step':step})
                         conversation = [conversation[0], {'role':'user','content':brief+'\nCORRECCIÓN: '+str(error)+'\nEntrega UN archivo completo en '+str(expected or 'el lenguaje solicitado')+'. Usa create_file con JSON válido, o un único bloque de código completo. Sin explicaciones, sin puntos suspensivos y sin repetir fragmentos anteriores.'}]
@@ -559,7 +565,7 @@ class AgentEngine:
                     return {'status':'incomplete','content':message,'steps':step}
             if not response.tool_calls:
                 final_content = response.content or "(Sin respuesta de texto del modelo)"
-                if creating and applied_paths:
+                if creating and applied_paths and not executed_actions:
                     final_content = 'Archivos guardados con tu aprobación: '+', '.join(dict.fromkeys(applied_paths))+'. La revisión estática no sustituye probar el proyecto. No se ejecutó ni compiló automáticamente; usa Verificar, Ejecutar o Compilar en AURAX.'
                 elif creating and declined:
                     final_content = 'No apliqué cambios: rechazaste la propuesta.' 
@@ -699,7 +705,12 @@ class AgentEngine:
                     )
                     await _emit(emit, "proposal", proposal.to_public_dict())
 
-                    if approval_handler is not None:
+                    if settings.autonomous_mode and tc.name != "delete_file":
+                        decision = ApprovalDecision(
+                            approved=True,
+                            feedback="Aplicado automáticamente en modo constructor.",
+                        )
+                    elif approval_handler is not None:
                         decision = await approval_handler(proposal)
                     else:
                         fut = self.approval_registry.register_proposal(proposal, run_id=run_id)
@@ -781,6 +792,133 @@ class AgentEngine:
                     )
                     continue
 
+                if tc.name in EXEC_TOOLS:
+                    from .command_exec import execute_project_action, execute_workspace_command, validate_command
+
+                    args = tc.arguments
+                    reason = str(args.get("reason") or "Verificación, prueba o compilación solicitada por el agente.").strip()
+                    runtime_dir = getattr(self.llm_client, "runtime", None)
+                    await _emit(
+                        emit,
+                        "tool_start",
+                        {"id": tc.id, "name": tc.name, "arguments": args},
+                    )
+                    try:
+                        if tc.name == "run_command":
+                            cmd_preview = validate_command(str(args.get("command") or ""))
+                            action_label = "command"
+                            target_label = "."
+                            timeout_sec = int(args.get("timeout") or 120)
+                        else:
+                            act_name = str(args.get("action") or "").strip().lower()
+                            target_arg = str(args.get("path") or "").strip() or None
+                            if target_arg and target_arg != ".":
+                                workspace.resolve_safe_path(target_arg)
+                            cmd_preview = f"run_project_action({act_name}" + (f", {target_arg}" if target_arg else "") + ")"
+                            action_label = act_name
+                            target_label = target_arg or "."
+                            timeout_sec = 300
+                    except (WorkspaceError, ValueError, TypeError) as exc:
+                        err_text = f"No se pudo ejecutar {tc.name}: {exc}"
+                        tool_traces.append({"name": tc.name, "ok": False, "summary": err_text})
+                        await _emit(emit, "tool_result", {"id": tc.id, "name": tc.name, "ok": False, "summary": err_text})
+                        conversation.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": err_text})
+                        continue
+
+                    if settings.autonomous_mode:
+                        decision = ApprovalDecision(approved=True, feedback="Ejecutado en modo constructor autónomo.")
+                    else:
+                        exec_proposal = PendingProposal(
+                            id=f"exec_{uuid.uuid4().hex[:12]}",
+                            session_id=session_id,
+                            workspace_path=str(workspace.root),
+                            file_path=target_label,
+                            action="exec",
+                            reason=reason,
+                            original_content=None,
+                            proposed_content=cmd_preview,
+                            base_hash="",
+                            unified_diff=f"$ {cmd_preview}",
+                            hunks=[],
+                            added_lines=0,
+                            removed_lines=0,
+                        )
+                        await _emit(emit, "proposal", exec_proposal.to_public_dict())
+                        if approval_handler is not None:
+                            decision = await approval_handler(exec_proposal)
+                        else:
+                            fut = self.approval_registry.register_proposal(exec_proposal, run_id=run_id)
+                            decision = await fut
+
+                    if not decision.approved:
+                        fb_note = f" Comentario: {decision.feedback}" if decision.feedback else ""
+                        msg_to_llm = f"El usuario rechazó ejecutar '{cmd_preview}'.{fb_note}"
+                        summary = f"Ejecución rechazada: {cmd_preview[:60]}"
+                        tool_traces.append({"name": tc.name, "ok": False, "summary": summary})
+                        await _emit(emit, "tool_result", {"id": tc.id, "name": tc.name, "ok": False, "summary": summary})
+                        conversation.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": msg_to_llm})
+                        continue
+
+                    loop = asyncio.get_running_loop()
+
+                    def _on_line(line: str) -> None:
+                        if emit is None:
+                            return
+                        try:
+                            asyncio.run_coroutine_threadsafe(_emit(emit, "command_output", {"line": line}), loop)
+                        except RuntimeError:
+                            pass
+
+                    def _is_cancelled() -> bool:
+                        return bool(cancel_event and cancel_event.is_set())
+
+                    try:
+                        if tc.name == "run_command":
+                            exec_res = await asyncio.to_thread(
+                                execute_workspace_command,
+                                workspace,
+                                runtime_dir,
+                                cmd_preview,
+                                timeout=timeout_sec,
+                                cancel_check=_is_cancelled,
+                                on_output=_on_line,
+                            )
+                        else:
+                            exec_res = await asyncio.to_thread(
+                                execute_project_action,
+                                workspace,
+                                runtime_dir,
+                                action_label,
+                                None if target_label == "." else target_label,
+                                cancel_check=_is_cancelled,
+                                on_output=_on_line,
+                            )
+                    except WorkspaceError as exc:
+                        err_text = f"Error al ejecutar {tc.name}: {exc}"
+                        tool_traces.append({"name": tc.name, "ok": False, "summary": err_text})
+                        await _emit(emit, "tool_result", {"id": tc.id, "name": tc.name, "ok": False, "summary": err_text})
+                        conversation.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": err_text})
+                        continue
+
+                    ok_flag = bool(exec_res.get("ok"))
+                    exit_code = int(exec_res.get("exit_code", 1))
+                    artifact = exec_res.get("artifact")
+                    raw_out = str(exec_res.get("output") or "")
+                    bounded_out = _truncate_text(raw_out, max(settings.max_tool_output_chars, 3200))
+                    executed_actions.append({"name": tc.name, "action": action_label, "exit_code": exit_code, "artifact": artifact})
+                    if hasattr(self, "coordinator"):
+                        self.coordinator.execution(session_id, str(workspace.root), action_label, str(exec_res.get("target") or target_label), exit_code)
+                    summary = f"{tc.name} ({action_label}): salida {exit_code}" + (f" · {artifact}" if artifact else "")
+                    msg_to_llm = (
+                        f"Resultado real de {tc.name} ({action_label}): código de salida {exit_code}.\n"
+                        + (f"Artefacto generado: {artifact}\n" if artifact else "")
+                        + (f"Salida:\n{bounded_out}" if bounded_out else "(Sin salida en consola)")
+                    )
+                    tool_traces.append({"name": tc.name, "ok": ok_flag, "summary": summary})
+                    await _emit(emit, "tool_result", {"id": tc.id, "name": tc.name, "ok": ok_flag, "summary": summary})
+                    conversation.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": msg_to_llm})
+                    continue
+
                 # Herramienta desconocida
                 err_unknown = f"Herramienta no reconocida: '{tc.name}'."
                 await _emit(
@@ -797,7 +935,7 @@ class AgentEngine:
                     }
                 )
 
-            if promoted and applied_paths:
+            if promoted and applied_paths and not settings.autonomous_mode:
                 message = 'Archivo guardado con tu aprobación: '+', '.join(dict.fromkeys(applied_paths))+'. Abierto en AURAX. Usa Verificar y Ejecutar para probarlo; no se ejecutó ni compiló automáticamente.'
                 self.storage.add_message(session_id, 'assistant', message, metadata={'tools':tool_traces})
                 await _emit(emit, 'done', {'content':message,'steps':step})
@@ -805,7 +943,7 @@ class AgentEngine:
 
         # Se alcanzó max_steps sin respuesta final limpia
         fallback_msg = (
-            f"Se alcanzó el límite de {settings.max_steps} pasos en este turno para cuidar el contexto "
+            f"Se alcanzó el límite de {effective_max_steps} pasos en este turno para cuidar el contexto "
             "del modelo local. Puedes pedir que continúe en el siguiente mensaje."
         )
         result_status = 'incomplete' if creating else 'done'
@@ -831,10 +969,10 @@ class AgentEngine:
                 "elapsed_ms": total_elapsed_ms,
                 "tok_per_sec": last_tok_per_sec,
                 "used_tool_mode": last_mode,
-                "steps": settings.max_steps,
+                "steps": effective_max_steps,
             },
         )
-        return {"status": result_status, "content": fallback_msg, "steps": settings.max_steps}
+        return {"status": result_status, "content": fallback_msg, "steps": effective_max_steps}
 
     def revert_change(self, change_id: str) -> dict[str, Any]:
         """Revierte un cambio aplicado en disco al estado previo registrado."""

@@ -294,6 +294,16 @@ class AgentEngine:
                 info = workspace.get_file_info(str(args.get("path") or ""))
                 return True, json.dumps(info, ensure_ascii=False), f"Info de {info['path']}"
 
+            if tc.name == "web_search":
+                from .web_research import web_search
+                result = web_search(str(args.get("query") or ""), max_results=int(args.get("max_results") or 5))
+                return True, _truncate_text(json.dumps(result, ensure_ascii=False), max(settings.max_tool_output_chars, 3200)), f"Buscó en web '{result['query'][:40]}' ({result['count']} resultados)"
+
+            if tc.name == "fetch_url":
+                from .web_research import fetch_url
+                result = fetch_url(str(args.get("url") or ""), max_chars=int(args.get("max_chars") or 4000))
+                return True, _truncate_text(json.dumps(result, ensure_ascii=False), max(settings.max_tool_output_chars, 4200)), f"Leyó documentación web: {result['url'][:60]}"
+
             return False, f"Herramienta desconocida: {tc.name}", f"Herramienta inválida {tc.name}"
         except (WorkspaceError, ValueError, TypeError, OSError, KeyError) as exc:
             return False, f"Error en {tc.name}: {exc}", f"Error en {tc.name}: {exc}"
@@ -636,7 +646,10 @@ class AgentEngine:
                         "tool_start",
                         {"id": tc.id, "name": tc.name, "arguments": tc.arguments},
                     )
-                    ok, tool_output, summary = self._execute_read_tool(workspace, tc, settings)
+                    if tc.name in ("web_search", "fetch_url"):
+                        ok, tool_output, summary = await asyncio.to_thread(self._execute_read_tool, workspace, tc, settings)
+                    else:
+                        ok, tool_output, summary = self._execute_read_tool(workspace, tc, settings)
                     tool_traces.append({"name": tc.name, "ok": ok, "summary": summary})
                     await _emit(
                         emit,

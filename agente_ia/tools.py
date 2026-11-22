@@ -16,6 +16,8 @@ READ_TOOLS: set[str] = {
     "read_file",
     "search_in_files",
     "get_file_info",
+    "web_search",
+    "fetch_url",
 }
 WRITE_TOOLS: set[str] = {"create_file", "edit_file", "write_file", "delete_file"}
 EXEC_TOOLS: set[str] = {"run_project_action", "run_command", "generate_image", "edit_image"}
@@ -265,6 +267,36 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Busca documentación y soluciones a errores en Internet.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "max_results": {"type": "integer"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_url",
+            "description": "Lee texto técnico de una URL pública (docs/API).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string"},
+                    "max_chars": {"type": "integer"},
+                },
+                "required": ["url"],
+            },
+        },
+    },
 ]
 
 
@@ -283,7 +315,9 @@ COMPACT_TOOL_SUMMARY = (
     "- run_project_action(action: check|test|build|run, path?, reason?)\n"
     "- run_command(command, timeout?, reason?)\n"
     "- generate_image(prompt, output_path, width?, height?, steps?, negative_prompt?)\n"
-    "- edit_image(input_path, output_path, prompt?, strength?, operations?)"
+    "- edit_image(input_path, output_path, prompt?, strength?, operations?)\n"
+    "- web_search(query, max_results?)\n"
+    "- fetch_url(url, max_chars?)"
 )
 
 

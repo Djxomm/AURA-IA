@@ -37,24 +37,24 @@ def locate_image_engine(runtime: Path | None) -> tuple[Path | None, Path | None]
     roots: list[Path] = []
     if runtime is not None:
         roots.append(Path(runtime).resolve() / "imagen")
-    default_rt = Path(__file__).resolve().parent.parent / "runtime" / "imagen"
-    if default_rt not in roots:
-        roots.append(default_rt)
+    for cand in (Path(__file__).resolve().parent.parent / "runtime" / "imagen",):
+        if cand not in roots:
+            roots.append(cand)
 
+    exe: Path | None = None
+    model: Path | None = None
     for root in roots:
         if not root.is_dir():
             continue
-        exe = next((p for p in (root / "motor").rglob("sd-cli.exe")), None) if (root / "motor").is_dir() else None
         if exe is None and (root / "motor").is_dir():
-            exe = next((p for p in (root / "motor").rglob("sd.exe")), None)
-        model = None
-        if (root / "modelos").is_dir():
+            exe = next((p for p in (root / "motor").rglob("sd-cli.exe")), None) or next(
+                (p for p in (root / "motor").rglob("sd.exe")), None
+            )
+        if model is None and (root / "modelos").is_dir():
             ggufs = sorted((root / "modelos").glob("*.gguf"), key=lambda p: p.stat().st_size)
             sts = sorted((root / "modelos").glob("*.safetensors"), key=lambda p: p.stat().st_size)
-            model = (ggufs[0] if ggufs else (sts[0] if sts else None))
-        if exe is not None and model is not None:
-            return exe, model
-    return None, None
+            model = ggufs[0] if ggufs else (sts[0] if sts else None)
+    return (exe, model) if (exe is not None and model is not None) else (None, None)
 
 
 def _run_sd_cli(

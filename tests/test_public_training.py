@@ -13,3 +13,12 @@ def test_public_training_examples_are_synthetic_disjoint_and_use_real_tool_names
         response=row['messages'][-1]['content']
         if '<tool_call>' in response:
             _,calls=parse_xml_tool_calls(response);assert len(calls)==1 and calls[0]['name'] in {'read_file','edit_file','create_file'}
+
+
+def test_wcag_check_ratios_and_css_extraction():
+    root=Path(__file__).parents[1];spec=importlib.util.spec_from_file_location('aura_wcag',root/'training/wcag_check.py');wcag=importlib.util.module_from_spec(spec);spec.loader.exec_module(wcag)
+    assert round(wcag.contrast_ratio('#000000','#ffffff'),1)==21.0
+    assert wcag.contrast_ratio('#c4c9d4','#ffffff')<4.5
+    assert wcag.contrast_ratio('#f8fafc','#0f172a')>=4.5
+    found=wcag.extract_css_vars(':root { --bg: #0f172a; --text: #f8fafc; }')
+    assert found=={'--bg':'#0f172a','--text':'#f8fafc'}

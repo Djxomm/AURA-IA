@@ -310,6 +310,22 @@ def parse_xml_tool_calls(text: str) -> tuple[str, list[dict[str, Any]]]:
             obj = _try_parse_json_obj(fenced.group(1))
             if obj and set(obj) <= {"name", "arguments"} and obj.get("name") in READ_TOOLS | WRITE_TOOLS and isinstance(obj.get("arguments"), dict):
                 return "", [{"id": "json_" + uuid.uuid4().hex[:10], "name": obj["name"], "arguments": obj["arguments"]}]
+        # Qwen2.5 models encode <tool_call>/</tool_call> as special tokens that llama-cli
+        # hides by default, leaving a leading bare JSON tool object. Accept only an
+        # exact known-tool envelope starting at offset 0.
+        stripped = text.lstrip()
+        if stripped.startswith("{"):
+            try:
+                obj, _ = json.JSONDecoder().raw_decode(stripped)
+            except json.JSONDecodeError:
+                obj = None
+            if (
+                isinstance(obj, dict)
+                and set(obj) <= {"name", "arguments"}
+                and obj.get("name") in READ_TOOLS | WRITE_TOOLS
+                and isinstance(obj.get("arguments"), dict)
+            ):
+                return "", [{"id": "json_" + uuid.uuid4().hex[:10], "name": obj["name"], "arguments": obj["arguments"]}]
         return text, []
 
     # Remover únicamente los bloques reconocidos para conservar el texto humano restante

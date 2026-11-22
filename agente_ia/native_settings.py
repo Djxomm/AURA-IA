@@ -1,6 +1,7 @@
 """Organized native settings, with editable controls rather than placeholder pages."""
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog,QHBoxLayout,QVBoxLayout,QWidget,QListWidget,QLabel,QStackedWidget,QScrollArea,QFormLayout,QCheckBox,QComboBox,QSpinBox,QDoubleSpinBox,QSlider,QPushButton,QDialogButtonBox,QLineEdit
+from .chat_controls import model_label
 from .hardware_profile import hardware_info,recommended_settings
 from .model_library import context_profile
 
@@ -19,7 +20,9 @@ class SettingsHub(QDialog):
         self.motion=QCheckBox('Animaciones suaves del asistente');self.motion.setChecked(owner.prefs.get('animations',True));general.addRow(self.motion)
         general.addRow('Apariencia',QLabel('Azul oscuro · AURA'))
         model=page('Modelos','El modelo y el nivel de razonamiento se eligen también desde la barra de escritura del chat.')
-        current=QLabel(owner.client.model.name);current.setWordWrap(True);model.addRow('Modelo actual',current);choose=QPushButton('Buscar modelo en la PC…');choose.clicked.connect(lambda:self.launch(owner.browse_chat_model));model.addRow(choose)
+        label=model_label(owner.client.model)
+        current_text=label if label==owner.client.model.name else f'{label} ({owner.client.model.name})'
+        current=QLabel(current_text);current.setWordWrap(True);model.addRow('Modelo actual',current);choose=QPushButton('Buscar modelo en la PC…');choose.clicked.connect(lambda:self.launch(owner.browse_chat_model));model.addRow(choose)
         form=page('Rendimiento','Para un i5 antiguo: modelo ligero y contexto de 2048–4096. Más contexto y modelos grandes necesitan más tiempo y memoria.')
         self.effort=QComboBox();self.effort.addItem('Rápido','rapido');self.effort.addItem('Equilibrado','equilibrado');self.effort.addItem('Profundo','profundo');self.effort.setCurrentIndex(self.effort.findData(s.thinking_effort));form.addRow('Razonamiento',self.effort)
         self.length=QSpinBox();self.length.setRange(0,16384);self.length.setSingleStep(128);self.length.setSpecialValueText('Automático');self.length.setValue(s.max_predict_tokens);form.addRow('Longitud máxima',self.length)

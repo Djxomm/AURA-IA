@@ -342,7 +342,8 @@ class Window(QMainWindow):
    from agente_ia.model_library import model_info
    if model_info(p).get('general.architecture') not in {'qwen2','gpt-oss'}:raise ValueError('Modelo no compatible: usa Qwen2 Instruct o GPT-oss GGUF.')
    registered=self.prefs.get('models',[]);registered=registered if isinstance(registered,list) else [];self.save_pref('models',list(dict.fromkeys([str(p),*[v for v in registered if isinstance(v,str)]])))
-   self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();self.status.setText('Modelo seleccionado: '+p.stem)
+   from agente_ia.chat_controls import model_label
+   self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();self.status.setText('Modelo seleccionado: '+model_label(p))
   except (OSError,ValueError) as exc:self.error(str(exc));self.refresh_chat_controls()
  def models(self):
   if self.guarded():return

@@ -71,7 +71,9 @@ class Window(QMainWindow):
   existing_database=(self.data/'aura.db').exists();self.store=Storage(self.data/'aura.db');projects=self.data/'Proyectos';projects.mkdir(exist_ok=True)
   settings=self.store.get_settings()
   if not existing_database or not Path(settings.workspace_path).is_dir():self.store.save_settings(settings.model_copy(update={'workspace_path':str(projects),'tool_mode':'xml',**recommended_settings(hardware_info())}))
-  self.memory=Memory(self.data/'memoria.db');self.skills=SkillStore(self.data/'skills');self.skills.install_defaults(ROOT/'skills');self.registry=ApprovalRegistry()
+  self.memory=Memory(self.data/'memoria.db');self.skills=SkillStore(self.data/'skills');self.skills.install_defaults(ROOT/'skills')
+  if (ROOT/'skills/reverse-engineer-anything/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','reverse-engineer-anything')
+  self.registry=ApprovalRegistry()
   self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.client.acceleration=self.prefs.get('acceleration','auto');self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
   self.setWindowTitle('AURA · Inteligencia Artificial — Escritorio');self.setWindowIcon(QIcon(str(ASSETS/'aura-icono-transparente.png')));self.resize(1180,760);self.setMinimumSize(760,540)
@@ -409,7 +411,11 @@ class Window(QMainWindow):
   l.addLayout(row);refresh();d.exec()
  def skills_panel(self):
   if self.guarded():return
-  d,l=self.dialog('Habilidades');listing=QListWidget();l.addWidget(listing)
+  from agente_ia.model_library import context_profile
+  from agente_ia.skills import max_enabled_for_context,MAX_FILE_BYTES_IMPORT
+  effective_ctx=max(self.store.get_settings().num_ctx,context_profile(self.client.model)['automatic'])
+  limit=max_enabled_for_context(effective_ctx)
+  d,l=self.dialog('Habilidades');note=QLabel(f'Límite ajustado al contexto de tu equipo ({effective_ctx} tokens): hasta {limit} habilidades activas · archivos .md hasta {MAX_FILE_BYTES_IMPORT//1024} KB.');note.setWordWrap(True);l.addWidget(note);listing=QListWidget();l.addWidget(listing)
   def refresh():
    listing.clear()
    for skill in self.skills.catalog():
@@ -421,7 +427,11 @@ class Window(QMainWindow):
     except Exception as e:self.error(e)
   def save():
    try:
-    for i in range(listing.count()):item=listing.item(i);self.skills.enable(item.data(Qt.ItemDataRole.UserRole),item.checkState()==Qt.CheckState.Checked)
+    pairs=[(listing.item(i).data(Qt.ItemDataRole.UserRole),listing.item(i).checkState()==Qt.CheckState.Checked) for i in range(listing.count())]
+    for sid,on in pairs:
+     if not on:self.skills.enable(sid,False,max_enabled=limit)
+    for sid,on in pairs:
+     if on:self.skills.enable(sid,True,max_enabled=limit)
     d.accept()
    except Exception as e:self.error(e)
   l.addWidget(btn('Importar carpeta de habilidad',import_));l.addWidget(btn('Guardar selección',save));refresh();d.exec()

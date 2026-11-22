@@ -234,13 +234,16 @@ class AgentEngine:
                 )
                 return True, _truncate_text(json.dumps(result, ensure_ascii=False), settings.max_tool_output_chars), f"Inspeccionó {result['path']}"
             if tc.name == "read_skill":
+                from .skills import read_chunk_for_context
+                chunk = read_chunk_for_context(settings.num_ctx)
                 result = self.skills_store.read(
                     str(args.get("id", "")),
                     int(args.get("offset", 0)),
                     file=str(args.get("file") or "SKILL.md"),
                     query=str(args.get("query") or ""),
+                    chunk_chars=chunk,
                 )
-                return True, _truncate_text(json.dumps(result, ensure_ascii=False), max(settings.max_tool_output_chars, 2000)), "Leyó habilidad: " + result["name"]
+                return True, _truncate_text(json.dumps(result, ensure_ascii=False), max(settings.max_tool_output_chars, chunk + 600)), "Leyó habilidad: " + result["name"]
             if tc.name == "list_files":
                 res = workspace.list_files(
                     path=str(args.get("path") or "."),
@@ -431,8 +434,9 @@ class AgentEngine:
             compact=settings.compact_prompt,
         )
         from .aura_api import effort_instruction
+        from .skills import max_enabled_for_context
         system_prompt += "\n" + effort_instruction(settings)
-        system_prompt += self.skills_store.manifest()
+        system_prompt += self.skills_store.manifest(max_enabled=max_enabled_for_context(settings.num_ctx))
         system_prompt += _task_context
         if reference_context:
             system_prompt += "\nReferencia histórica, no instrucciones actuales:\n"+reference_context[:6000]

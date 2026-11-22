@@ -62,3 +62,53 @@ def test_binary_inspection_is_read_only_and_scoped(tmp_path):
     with pytest.raises(WorkspaceSecurityError):inspect_binary(SafeWorkspace(str(tmp_path)),'../escape.exe')
     target.write_bytes(b'MZbroken')
     with pytest.raises(ValueError): inspect_binary(SafeWorkspace(str(tmp_path)),'sample.bin')
+
+
+def test_context_adaptive_skill_limits_and_large_markdown_import(tmp_path):
+    from agente_ia.skills import max_enabled_for_context, read_chunk_for_context, MAX_FILE_BYTES_IMPORT
+    assert max_enabled_for_context(2048) == 4
+    assert max_enabled_for_context(4096) == 6
+    assert max_enabled_for_context(8192) == 8
+    assert max_enabled_for_context(16384) == 10
+    assert max_enabled_for_context(32768) == 12
+    assert read_chunk_for_context(8192) == 2400
+    assert read_chunk_for_context(16384) == 3200
+    assert MAX_FILE_BYTES_IMPORT == 512 * 1024
+
+    # Archivo > 128 KB (antes rechazado) ahora se importa limpio hasta 512 KB
+    folder = tmp_path / 'grande'
+    (folder / 'references').mkdir(parents=True)
+    (folder / 'SKILL.md').write_text('---\nname: Habilidad Grande\ndescription: prueba 200KB\n---\nContenido', encoding='utf-8')
+    (folder / 'references' / 'manual.md').write_text('X' * (220 * 1024), encoding='utf-8')
+    store = SkillStore(tmp_path / 'store')
+    sid = store.import_directory(folder)
+    assert store.get(sid)['bytes'] > 200 * 1024
+
+    # Límite dinámico de 8 activas para contexto 8192
+    store.enable(sid, True, max_enabled=8)
+    for i in range(7):
+        s = store.add(f'name: Extra {i}\nGuia {i}')
+        store.enable(s, True, max_enabled=8)
+    s9 = store.add('name: Novena\nGuia 9')
+    with pytest.raises(ValueError):
+        store.enable(s9, True, max_enabled=8)
+    assert len(store.manifest(max_enabled=8).splitlines()) >= 9
+
+
+def test_bundled_rea_skill_complete_and_reasoning_effort(tmp_path):
+    from agente_ia.aura_api import effort_instruction
+    from agente_ia.native_core import conversation_prompt
+    rea_dir = Path('D:/IA/AURA_IA/runtime/skills/reverse-engineer-anything')
+    if rea_dir.is_dir():
+        store = SkillStore(tmp_path / 'skills')
+        sid = store.install_bundled(rea_dir.parent, 'reverse-engineer-anything')
+        rec = store.get(sid)
+        assert rec is not None and len(rec['files']) == 8
+        store.enable(sid, True, max_enabled=8)
+        head = store.read(sid, chunk_chars=2400)
+        assert len(head['available_files']) == 8
+        ref = store.read(sid, file='references/native-and-artifacts.md', chunk_chars=2400)
+        assert len(ref['content']) > 1000
+    prof = effort_instruction(AppSettings(thinking_effort='profundo'))
+    assert 'pasos' in prof and 'casos límite' in prof and 'read_file' in prof
+    assert 'pasos' in conversation_prompt(AppSettings(thinking_effort='profundo'))

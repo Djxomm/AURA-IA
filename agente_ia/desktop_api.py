@@ -13,7 +13,7 @@ from fastapi import HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from .skills import MAX_ENABLED_SKILLS
+from .skills import MAX_ENABLED_SKILLS, max_enabled_for_context
 from .workspace import SafeWorkspace
 
 
@@ -122,13 +122,22 @@ def register_skill_routes(app: Any) -> None:
     def fail(exc: Exception, status: int = 400) -> None:
         raise HTTPException(status, str(exc)) from exc
 
+    def active_limit() -> int:
+        storage = getattr(app.state, "storage", None)
+        if storage is None:
+            return MAX_ENABLED_SKILLS
+        try:
+            return max_enabled_for_context(storage.get_settings().num_ctx)
+        except Exception:
+            return MAX_ENABLED_SKILLS
+
     @app.get("/api/skills")
     async def skills_list() -> dict[str, Any]:
         skills = store.catalog()
         return {
             "skills": skills,
             "enabled_count": sum(1 for s in skills if s.get("enabled")),
-            "max_enabled": MAX_ENABLED_SKILLS,
+            "max_enabled": active_limit(),
             "bundled": store.list_bundled(bundled_dir),
         }
 
@@ -164,7 +173,7 @@ def register_skill_routes(app: Any) -> None:
     @app.put("/api/skills/{skill_id}")
     async def skills_enable(skill_id: str, payload: SkillEnableRequest) -> dict[str, Any]:
         try:
-            updated = store.enable(skill_id, payload.enabled)
+            updated = store.enable(skill_id, payload.enabled, max_enabled=active_limit())
             return {"ok": True, "skill": updated}
         except (ValueError, OSError) as exc:
             fail(exc)

@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field
 def effort_instruction(settings):
     text={
         'rapido':'Prioriza una respuesta breve y directa. Comprueba lo esencial sin agregar pasos innecesarios.',
-        'equilibrado':'Responde con precisión y claridad. Comprueba las suposiciones relevantes y explica brevemente el resultado.',
-        'profundo':'Revisa con cuidado supuestos y casos límite antes de responder. Presenta el resultado y un resumen breve de comprobaciones, sin exponer razonamiento privado.'
+        'equilibrado':'Responde con precisión y claridad. Verifica contratos, nombres exactos y casos límite habituales antes de responder.',
+        'profundo':'Razona por pasos antes de responder: descompón el problema, verifica supuestos, tipos, casos límite (vacío, nulo, cero y rangos), conserva funciones existentes y consulta archivos o habilidades relevantes con read_file/read_skill antes de editar. Presenta la solución ordenada con un resumen breve de comprobaciones, sin exponer razonamiento privado.'
     }[settings.thinking_effort]
     if not settings.show_explanation:text+=' Entrega solo el resultado, salvo que el usuario pida explicaciones.'
     return text

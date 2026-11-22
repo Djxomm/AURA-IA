@@ -87,7 +87,7 @@ class NativeClient:
   harmony=model_info(self.model).get("general.architecture")=="gpt-oss"
   prompt=''.join('<|im_start|>'+str(x['role'])+'\n'+str(x.get('content','')).replace('\r','')+'<|im_end|>\n' for x in messages)+'<|im_start|>assistant\n'
   if harmony:prompt=harmony_prompt(messages,settings.thinking_effort)
-  budget=settings.max_predict_tokens or {'rapido':256,'equilibrado':512,'profundo':1024}[settings.thinking_effort]
+  budget=settings.max_predict_tokens or {'rapido':256,'equilibrado':512,'profundo':2048}[settings.thinking_effort]
   effective=settings.num_ctx
   automatic=context_profile(self.model)['automatic']
   if self.auto_context and len(prompt)//2+128+min(budget,512)>effective and effective<automatic:effective=automatic
@@ -171,5 +171,5 @@ def spoken_text(text):
 
 
 def conversation_prompt(settings):
- effort={'rapido':'Sé breve y directo.','equilibrado':'Responde con claridad.','profundo':'Revisa con cuidado y explica las decisiones.'}[settings.thinking_effort]
- return 'Eres AURA, asistente local en español. En Conversación no ejecutas comandos ni modificas archivos. '+effort
+ from .aura_api import effort_instruction
+ return 'Eres AURA, asistente local en español. En Conversación no ejecutas comandos ni modificas archivos. '+effort_instruction(settings)

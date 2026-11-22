@@ -14,13 +14,38 @@ from pathlib import Path
 from typing import Any
 
 
-MAX_SKILLS_CATALOG = 50
+MAX_SKILLS_CATALOG = 100
 MAX_ENABLED_SKILLS = 4
 MAX_SINGLE_ADD_BYTES = 512 * 1024
-MAX_FILE_BYTES_IMPORT = 128 * 1024
-MAX_SKILL_TOTAL_BYTES = 2 * 1024 * 1024
-MAX_FILES_PER_SKILL = 60
+MAX_FILE_BYTES_IMPORT = 512 * 1024
+MAX_SKILL_TOTAL_BYTES = 8 * 1024 * 1024
+MAX_FILES_PER_SKILL = 120
 READ_CHUNK_CHARS = 1600
+
+
+def max_enabled_for_context(num_ctx: int | None = None) -> int:
+    """Ajusta el límite de habilidades activas al contexto real disponible del modelo/PC."""
+    if num_ctx is None:
+        return MAX_ENABLED_SKILLS
+    ctx = int(num_ctx)
+    if ctx <= 2048:
+        return 4
+    if ctx <= 4096:
+        return 6
+    if ctx <= 8192:
+        return 8
+    if ctx <= 16384:
+        return 10
+    return 12
+
+
+def read_chunk_for_context(num_ctx: int | None = None) -> int:
+    """Ajusta el tamaño de lectura bajo demanda de read_skill según el contexto activo."""
+    if num_ctx is None or int(num_ctx) <= 4096:
+        return READ_CHUNK_CHARS
+    if int(num_ctx) <= 8192:
+        return 2400
+    return 3200
 
 _SKILL_ID_RE = re.compile(r"^[a-f0-9]{12,24}$")
 _SLUG_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -184,7 +209,7 @@ class SkillStore:
                 if existing.get("sha256") == digest:
                     return str(existing["id"])
             if len(records) >= MAX_SKILLS_CATALOG:
-                raise ValueError("El catálogo admite hasta 50 habilidades.")
+                raise ValueError(f"El catálogo admite hasta {MAX_SKILLS_CATALOG} habilidades.")
 
             sid = uuid.uuid4().hex[:24]
             sdir = self.directory / sid
@@ -254,11 +279,11 @@ class SkillStore:
                 raise ValueError(f"No se pudo leer '{rel_posix}': {exc}") from exc
             if len(data) > MAX_FILE_BYTES_IMPORT:
                 raise ValueError(
-                    f"El archivo '{rel_posix}' supera el máximo permitido de 128 KB por documento."
+                    f"El archivo '{rel_posix}' supera el máximo permitido de {MAX_FILE_BYTES_IMPORT // 1024} KB por documento."
                 )
             total_bytes += len(data)
             if total_bytes > MAX_SKILL_TOTAL_BYTES:
-                raise ValueError("La habilidad completa supera el máximo permitido de 2 MB.")
+                raise ValueError(f"La habilidad completa supera el máximo permitido de {MAX_SKILL_TOTAL_BYTES // (1024 * 1024)} MB.")
             collected.append((rel_posix, data))
 
         main_text = collected[0][1].decode("utf-8", errors="replace")
@@ -271,7 +296,7 @@ class SkillStore:
         with self.lock:
             records = self._load_index_unlocked()
             if len(records) >= MAX_SKILLS_CATALOG:
-                raise ValueError("El catálogo admite hasta 50 habilidades.")
+                raise ValueError(f"El catálogo admite hasta {MAX_SKILLS_CATALOG} habilidades.")
 
             sid = uuid.uuid4().hex[:24]
             dest_root = self.directory / sid
@@ -297,9 +322,10 @@ class SkillStore:
             self._save_index_unlocked(records)
             return sid
 
-    def enable(self, skill_id: str, enabled: bool) -> dict[str, Any]:
-        """Activa o desactiva una habilidad respetando el máximo de 4 activas."""
+    def enable(self, skill_id: str, enabled: bool, *, max_enabled: int | None = None) -> dict[str, Any]:
+        """Activa o desactiva una habilidad respetando el máximo ajustado al contexto."""
         sid = self._validate_id(skill_id)
+        limit = max(1, int(max_enabled)) if max_enabled is not None else MAX_ENABLED_SKILLS
         with self.lock:
             records = self._load_index_unlocked()
             target = next((r for r in records if r.get("id") == sid), None)
@@ -308,8 +334,8 @@ class SkillStore:
 
             if enabled and not target.get("enabled"):
                 active_count = sum(1 for r in records if r.get("enabled"))
-                if active_count >= MAX_ENABLED_SKILLS:
-                    raise ValueError("Activa como máximo cuatro habilidades para ahorrar contexto.")
+                if active_count >= limit:
+                    raise ValueError(f"Activa como máximo {limit} habilidades para ahorrar contexto.")
 
             target["enabled"] = bool(enabled)
             self._save_index_unlocked(records)
@@ -334,8 +360,9 @@ class SkillStore:
         *,
         allow_disabled: bool = False,
         query: str = "",
+        chunk_chars: int | None = None,
     ) -> dict[str, Any]:
-        """Lee un bloque de 1600 caracteres de una habilidad o referencia autorizada."""
+        """Lee un bloque acotado de una habilidad o referencia autorizada."""
         sid = self._validate_id(skill_id)
         rel_req = (file or "SKILL.md").strip().replace("\\", "/").lstrip("/")
         if not rel_req:
@@ -369,7 +396,8 @@ class SkillStore:
                 if found < 0:
                     return {"name":record["name"],"content":"No se encontró el texto solicitado.","next_offset":None}
                 safe_offset=max(0,found-100)
-            chunk = content[safe_offset : safe_offset + READ_CHUNK_CHARS]
+            chunk_size = max(400, min(6400, int(chunk_chars))) if chunk_chars is not None else READ_CHUNK_CHARS
+            chunk = content[safe_offset : safe_offset + chunk_size]
             next_off = safe_offset + len(chunk) if safe_offset + len(chunk) < len(content) else None
             rel_clean = candidate.relative_to(skill_dir).as_posix()
 
@@ -383,7 +411,7 @@ class SkillStore:
                 "total_chars": len(content),
             }
             if safe_offset == 0:
-                payload["available_files"] = list(record.get("files") or ["SKILL.md"])[:8]
+                payload["available_files"] = list(record.get("files") or ["SKILL.md"])[:16]
                 payload["file_count"] = len(record.get("files") or ["SKILL.md"])
             return payload
 
@@ -459,9 +487,10 @@ class SkillStore:
         self.directory.mkdir(parents=True,exist_ok=True)
         marker.touch()
 
-    def manifest(self) -> str:
+    def manifest(self, *, max_enabled: int | None = None) -> str:
         """Genera un resumen compacto para el prompt con solo las habilidades activas."""
-        enabled = [r for r in self.catalog() if r.get("enabled")][:MAX_ENABLED_SKILLS]
+        limit = max(1, int(max_enabled)) if max_enabled is not None else MAX_ENABLED_SKILLS
+        enabled = [r for r in self.catalog() if r.get("enabled")][:limit]
         if not enabled:
             return ""
         lines: list[str] = []

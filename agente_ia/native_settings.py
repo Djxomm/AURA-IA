@@ -24,7 +24,7 @@ class SettingsHub(QDialog):
         current_text=label if label==owner.client.model.name else f'{label} ({owner.client.model.name})'
         current=QLabel(current_text);current.setWordWrap(True);model.addRow('Modelo actual',current);choose=QPushButton('Buscar modelo en la PC…');choose.clicked.connect(lambda:self.launch(owner.browse_chat_model));model.addRow(choose)
         form=page('Rendimiento','Para un i5 antiguo: modelo ligero y contexto de 2048–4096. Más contexto y modelos grandes necesitan más tiempo y memoria.')
-        self.effort=QComboBox();self.effort.addItem('Rápido','rapido');self.effort.addItem('Equilibrado','equilibrado');self.effort.addItem('Profundo','profundo');self.effort.setCurrentIndex(self.effort.findData(s.thinking_effort));form.addRow('Razonamiento',self.effort)
+        self.effort=QComboBox();self.effort.addItem('Rápido','rapido');self.effort.addItem('Equilibrado','equilibrado');self.effort.addItem('Profundo','profundo');self.effort.addItem('Máximo · 16K + razonamiento extendido','maximo');self.effort.setCurrentIndex(self.effort.findData(s.thinking_effort));form.addRow('Razonamiento',self.effort)
         self.length=QSpinBox();self.length.setRange(0,16384);self.length.setSingleStep(128);self.length.setSpecialValueText('Automático');self.length.setValue(s.max_predict_tokens);form.addRow('Longitud máxima',self.length)
         self.hardware=hardware_info();self.context_profile=context_profile(owner.client.model,self.hardware)
         self.context=QSlider(Qt.Orientation.Horizontal);self.context.setRange(512,self.context_profile['maximum']);self.context.setSingleStep(1024);self.context.setPageStep(1024);self.context.setValue(s.num_ctx)

@@ -5,7 +5,7 @@ from PySide6.QtCore import Signal,QSize,Qt
 from PySide6.QtGui import QActionGroup
 from PySide6.QtWidgets import QWidget,QHBoxLayout,QToolButton,QMenu,QStylePainter,QStyleOptionToolButton,QStyle
 
-LEVELS={'rapido':'Rápido','equilibrado':'Equilibrado','profundo':'Profundo'}
+LEVELS={'rapido':'Rápido','equilibrado':'Equilibrado','profundo':'Profundo','maximo':'Máximo'}
 
 def model_label(path):
     p=Path(path);name=p.stem;low=name.lower()
@@ -56,7 +56,7 @@ class ChatControls(QWidget):
         self.model_menu=QMenu(self);self.model_button.setMenu(self.model_menu)
         self.effort_button=MenuButton(self);self.effort_button.setObjectName('chatEffortButton');self.effort_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.effort_menu=QMenu(self);self.effort_button.setMenu(self.effort_menu)
-        self.effort_button.setToolTip('Rápido: respuesta breve. Profundo: pide una revisión más detallada y puede tardar más. No cambia las capacidades del modelo.')
+        self.effort_button.setToolTip('Rápido: breve. Equilibrado: balanceado. Profundo: análisis por pasos (2048 tokens). Máximo: razonamiento extremo (4096 tokens) + contexto ampliado hasta 16K para peticiones complejas o ambiguas.')
         self.settings_button=QToolButton(self);self.settings_button.setText('…');self.settings_button.setFixedWidth(38);self.settings_button.setStyleSheet('padding:5px;');self.settings_button.setToolTip('Contexto y ajustes de rendimiento');self.settings_button.setAccessibleName('Configuración y rendimiento');self.settings_button.clicked.connect(self.settings_requested.emit)
         row.addWidget(self.model_button);row.addWidget(self.effort_button);row.addStretch(1);row.addWidget(self.settings_button)
         self.setStyleSheet('QToolButton{color:#e4eaf4;background:#142238;border:1px solid #294563;border-radius:8px;padding:8px 18px 8px 10px;} QToolButton:hover{background:#213b59;} QToolButton:focus{border:1px solid #8bd2ff;} QToolButton:disabled{color:#a0b1c7;} QMenu{background:#102035;color:#edf4ff;border:1px solid #34506c;padding:5px;} QMenu::item{padding:8px 20px;} QMenu::item:selected{background:#23547a;color:white;} QMenu::separator{height:1px;background:#294563;margin:6px 10px;}')

@@ -139,7 +139,7 @@ class AppSettings(BaseModel):
     intro_video: bool = True
     default_mode: Literal["chat", "code"] = "chat"
     local_model_id: str = "incluido"
-    thinking_effort: Literal["rapido", "equilibrado", "profundo"] = "equilibrado"
+    thinking_effort: Literal["rapido", "equilibrado", "profundo", "maximo"] = "equilibrado"
     show_explanation: bool = True
     reasoning_supported: bool = False
     provider: ProviderName = "llamacpp"

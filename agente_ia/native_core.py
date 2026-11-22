@@ -87,10 +87,12 @@ class NativeClient:
   harmony=model_info(self.model).get("general.architecture")=="gpt-oss"
   prompt=''.join('<|im_start|>'+str(x['role'])+'\n'+str(x.get('content','')).replace('\r','')+'<|im_end|>\n' for x in messages)+'<|im_start|>assistant\n'
   if harmony:prompt=harmony_prompt(messages,settings.thinking_effort)
-  budget=settings.max_predict_tokens or {'rapido':256,'equilibrado':512,'profundo':2048}[settings.thinking_effort]
+  budget=settings.max_predict_tokens or {'rapido':256,'equilibrado':512,'profundo':2048,'maximo':4096}[settings.thinking_effort]
   effective=settings.num_ctx
-  automatic=context_profile(self.model)['automatic']
-  if self.auto_context and len(prompt)//2+128+min(budget,512)>effective and effective<automatic:effective=automatic
+  profile=context_profile(self.model)
+  automatic=min(profile['maximum'],16384) if settings.thinking_effort=='maximo' else profile['automatic']
+  if self.auto_context and settings.thinking_effort=='maximo' and effective<automatic:effective=automatic
+  elif self.auto_context and len(prompt)//2+128+min(budget,512)>effective and effective<automatic:effective=automatic
   self.effective_context=effective
   if len(prompt)//2+96>=effective:raise ProviderError('Este texto supera el contexto disponible ('+str(effective)+' tokens). Conservé el historial: divide la especificación o usa un archivo con las partes necesarias. Puedes ajustar la barra de contexto; no es una cuota de uso.')
   budget=min(budget,max(32,effective-len(prompt)//2-64))

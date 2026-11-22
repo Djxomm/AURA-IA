@@ -18,7 +18,7 @@ READ_TOOLS: set[str] = {
     "get_file_info",
 }
 WRITE_TOOLS: set[str] = {"create_file", "edit_file", "write_file", "delete_file"}
-EXEC_TOOLS: set[str] = {"run_project_action", "run_command"}
+EXEC_TOOLS: set[str] = {"run_project_action", "run_command", "generate_image", "edit_image"}
 ALL_TOOLS: set[str] = READ_TOOLS | WRITE_TOOLS | EXEC_TOOLS
 
 
@@ -197,20 +197,13 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "run_project_action",
-            "description": "Verifica sintaxis (check), ejecuta pruebas (test), compila (build) o ejecuta (run) el proyecto actual y devuelve el código de salida y salida real.",
+            "description": "Ejecuta check, test, build o run en el proyecto.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["check", "test", "build", "run"],
-                        "description": "Acción real a ejecutar: check, test, build o run.",
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "Ruta relativa opcional del archivo objetivo dentro del workspace.",
-                    },
-                    "reason": {"type": "string", "description": "Motivo breve de la ejecución."},
+                    "action": {"type": "string", "enum": ["check", "test", "build", "run"]},
+                    "path": {"type": "string"},
+                    "reason": {"type": "string"},
                 },
                 "required": ["action"],
             },
@@ -220,15 +213,55 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "run_command",
-            "description": "Ejecuta un comando de desarrollo dentro de la carpeta del proyecto (ej. pytest, py_compile, npm run build, g++) y devuelve el código de salida y consola real.",
+            "description": "Ejecuta un comando local en el workspace.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "Comando a ejecutar dentro del workspace."},
-                    "timeout": {"type": "integer", "description": "Tiempo límite en segundos (5 a 300, por defecto 120)."},
-                    "reason": {"type": "string", "description": "Motivo breve del comando."},
+                    "command": {"type": "string"},
+                    "timeout": {"type": "integer"},
+                    "reason": {"type": "string"},
                 },
                 "required": ["command"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_image",
+            "description": "Genera una imagen offline en el workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string"},
+                    "output_path": {"type": "string"},
+                    "negative_prompt": {"type": "string"},
+                    "width": {"type": "integer"},
+                    "height": {"type": "integer"},
+                    "steps": {"type": "integer"},
+                    "cfg_scale": {"type": "number"},
+                    "seed": {"type": "integer"},
+                },
+                "required": ["prompt", "output_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_image",
+            "description": "Edita una imagen offline con img2img y/o Pillow.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "input_path": {"type": "string"},
+                    "output_path": {"type": "string"},
+                    "prompt": {"type": "string"},
+                    "strength": {"type": "number"},
+                    "steps": {"type": "integer"},
+                    "operations": {"type": "array", "items": {"type": "object"}},
+                },
+                "required": ["input_path", "output_path"],
             },
         },
     },
@@ -248,7 +281,9 @@ COMPACT_TOOL_SUMMARY = (
     "- write_file(path, content, reason)\n"
     "- delete_file(path, reason)\n"
     "- run_project_action(action: check|test|build|run, path?, reason?)\n"
-    "- run_command(command, timeout?, reason?)"
+    "- run_command(command, timeout?, reason?)\n"
+    "- generate_image(prompt, output_path, width?, height?, steps?, negative_prompt?)\n"
+    "- edit_image(input_path, output_path, prompt?, strength?, operations?)"
 )
 
 

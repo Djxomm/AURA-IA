@@ -12,7 +12,8 @@ def effort_instruction(settings):
     text={
         'rapido':'Prioriza una respuesta breve y directa. Comprueba lo esencial sin agregar pasos innecesarios.',
         'equilibrado':'Responde con precisión y claridad. Verifica contratos, nombres exactos y casos límite habituales antes de responder.',
-        'profundo':'Razona por pasos antes de responder: descompón el problema, verifica supuestos, tipos, casos límite (vacío, nulo, cero y rangos), conserva funciones existentes y consulta archivos o habilidades relevantes con read_file/read_skill antes de editar. Presenta la solución ordenada con un resumen breve de comprobaciones, sin exponer razonamiento privado.'
+        'profundo':'Razona por pasos antes de responder: descompón el problema, verifica supuestos, tipos, casos límite (vacío, nulo, cero y rangos), conserva funciones existentes y consulta archivos o habilidades relevantes con read_file/read_skill antes de editar. Presenta la solución ordenada con un resumen breve de comprobaciones, sin exponer razonamiento privado.',
+        'maximo':'MODO RAZONAMIENTO MÁXIMO: interpreta peticiones humanas ambiguas, informales, incompletas o con faltas de ortografía deduciendo la intención técnica real sin reprender al usuario. Obedece órdenes directas actuando de inmediato con herramientas reales (inspeccionar, editar, crear, probar, compilar, generar/editar imágenes o scripts 3D) en lugar de entregar pasos manuales. Descompón la arquitectura, valida contratos, tipos, seguridad, contraste WCAG y casos límite (vacío, nulo, cero, negativos y concurrencia), y verifica el resultado final con salida real.'
     }[settings.thinking_effort]
     if not settings.show_explanation:text+=' Entrega solo el resultado, salvo que el usuario pida explicaciones.'
     return text

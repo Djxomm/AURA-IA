@@ -352,15 +352,15 @@ class LocalLLMClient:
         # old backend crop prompts to 128 tokens and appear to hang.
         prompt_estimate = sum(len(str(m.get("content") or "")) for m in messages) // 2 + 12 * len(messages) + 64
         if tools:
-            prompt_estimate += len(json.dumps(tools)) // 2
+            prompt_estimate += len(json.dumps(tools, separators=(",", ":"))) // 3
         available = settings.num_ctx - prompt_estimate - 64
         if available < 32:
             raise ProviderError("El contexto está lleno. Abre una conversación nueva, adjunta menos código o amplía el contexto en Modelos.")
-        defaults = {"rapido": 256, "equilibrado": 512, "profundo": 2048}
+        defaults = {"rapido": 256, "equilibrado": 512, "profundo": 2048, "maximo": 4096}
         requested = settings.max_predict_tokens or defaults[settings.thinking_effort]
         payload["max_tokens"] = max(32, min(requested, available))
         if settings.reasoning_supported:
-            payload["chat_template_kwargs"] = {"enable_thinking": settings.thinking_effort == "profundo"}
+            payload["chat_template_kwargs"] = {"enable_thinking": settings.thinking_effort in ("profundo", "maximo")}
         if tools:
             payload["tools"] = tools
 
@@ -443,15 +443,15 @@ class LocalLLMClient:
         # old backend crop prompts to 128 tokens and appear to hang.
         prompt_estimate = sum(len(str(m.get("content") or "")) for m in messages) // 2 + 12 * len(messages) + 64
         if tools:
-            prompt_estimate += len(json.dumps(tools)) // 2
+            prompt_estimate += len(json.dumps(tools, separators=(",", ":"))) // 3
         available = settings.num_ctx - prompt_estimate - 64
         if available < 32:
             raise ProviderError("El contexto está lleno. Abre una conversación nueva, adjunta menos código o amplía el contexto en Modelos.")
-        defaults = {"rapido": 256, "equilibrado": 512, "profundo": 2048}
+        defaults = {"rapido": 256, "equilibrado": 512, "profundo": 2048, "maximo": 4096}
         requested = settings.max_predict_tokens or defaults[settings.thinking_effort]
         payload["max_tokens"] = max(32, min(requested, available))
         if settings.reasoning_supported:
-            payload["chat_template_kwargs"] = {"enable_thinking": settings.thinking_effort == "profundo"}
+            payload["chat_template_kwargs"] = {"enable_thinking": settings.thinking_effort in ("profundo", "maximo")}
         if tools:
             payload["tools"] = tools
 

@@ -6,7 +6,7 @@ from .providers import ProviderError
 
 
 def prompt(messages,effort):
-    level={'rapido':'low','equilibrado':'medium','profundo':'high'}.get(effort,'medium')
+    level={'rapido':'low','equilibrado':'medium','profundo':'high','maximo':'high'}.get(effort,'medium')
     header='You are ChatGPT, a large language model trained by OpenAI.\nKnowledge cutoff: 2024-06\nCurrent date: '+datetime.now().strftime('%Y-%m-%d')+'\n\nReasoning: '+level+'\n\n# Valid channels: analysis, commentary, final. Channel must be included for every message.'
     output='<|start|>system<|message|>'+header+'<|end|>'
     for message in messages:

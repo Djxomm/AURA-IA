@@ -73,6 +73,7 @@ class Window(QMainWindow):
   if not existing_database or not Path(settings.workspace_path).is_dir():self.store.save_settings(settings.model_copy(update={'workspace_path':str(projects),'tool_mode':'xml',**recommended_settings(hardware_info())}))
   self.memory=Memory(self.data/'memoria.db');self.skills=SkillStore(self.data/'skills');self.skills.install_defaults(ROOT/'skills')
   if (ROOT/'skills/reverse-engineer-anything/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','reverse-engineer-anything')
+  if (ROOT/'skills/blender-3d/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','blender-3d')
   self.registry=ApprovalRegistry()
   self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.client.acceleration=self.prefs.get('acceleration','auto');self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)

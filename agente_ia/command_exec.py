@@ -69,6 +69,12 @@ def _build_env(runtime: Path | None) -> dict[str, str]:
         py_dir = Path(sys.executable).resolve().parent
         if py_dir.is_dir():
             prefixes.append(str(py_dir))
+    for blender_root in (Path(r"C:\Program Files\Blender Foundation"), Path(r"C:\Program Files (x86)\Blender Foundation")):
+        if blender_root.is_dir():
+            for cand in sorted(blender_root.glob("Blender*"), reverse=True):
+                if (cand / "blender.exe").is_file():
+                    prefixes.append(str(cand))
+                    break
     if prefixes:
         env["PATH"] = os.pathsep.join(prefixes) + os.pathsep + env.get("PATH", "")
     return env

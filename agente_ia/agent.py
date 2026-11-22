@@ -794,9 +794,11 @@ class AgentEngine:
 
                 if tc.name in EXEC_TOOLS:
                     from .command_exec import execute_project_action, execute_workspace_command, validate_command
+                    from .image_studio import edit_image as studio_edit_image
+                    from .image_studio import generate_image as studio_generate_image
 
                     args = tc.arguments
-                    reason = str(args.get("reason") or "Verificación, prueba o compilación solicitada por el agente.").strip()
+                    reason = str(args.get("reason") or "Verificación, prueba, compilación o imagen solicitada por el agente.").strip()
                     runtime_dir = getattr(self.llm_client, "runtime", None)
                     await _emit(
                         emit,
@@ -809,6 +811,22 @@ class AgentEngine:
                             action_label = "command"
                             target_label = "."
                             timeout_sec = int(args.get("timeout") or 120)
+                        elif tc.name == "generate_image":
+                            out_p = str(args.get("output_path") or "").strip()
+                            workspace.resolve_safe_path(out_p, allow_write=True)
+                            cmd_preview = f"generate_image({out_p}, prompt={str(args.get('prompt') or '')[:80]})"
+                            action_label = "generate_image"
+                            target_label = out_p
+                            timeout_sec = 300
+                        elif tc.name == "edit_image":
+                            in_p = str(args.get("input_path") or "").strip()
+                            out_p = str(args.get("output_path") or "").strip()
+                            workspace.resolve_safe_path(in_p)
+                            workspace.resolve_safe_path(out_p, allow_write=True)
+                            cmd_preview = f"edit_image({in_p} -> {out_p})"
+                            action_label = "edit_image"
+                            target_label = out_p
+                            timeout_sec = 300
                         else:
                             act_name = str(args.get("action") or "").strip().lower()
                             target_arg = str(args.get("path") or "").strip() or None
@@ -883,6 +901,52 @@ class AgentEngine:
                                 cancel_check=_is_cancelled,
                                 on_output=_on_line,
                             )
+                        elif tc.name == "generate_image":
+                            img_res = await asyncio.to_thread(
+                                studio_generate_image,
+                                workspace,
+                                runtime_dir,
+                                str(args.get("prompt") or ""),
+                                str(args.get("output_path") or ""),
+                                negative_prompt=str(args.get("negative_prompt") or "blurry, lowres, watermark, deformed"),
+                                width=int(args.get("width") or 512),
+                                height=int(args.get("height") or 512),
+                                steps=int(args.get("steps") or 6),
+                                cfg_scale=float(args.get("cfg_scale") if args.get("cfg_scale") is not None else 1.5),
+                                seed=int(args.get("seed") if args.get("seed") is not None else -1),
+                                threads=max(1, int(settings.num_thread or 4)),
+                                cancel_check=_is_cancelled,
+                            )
+                            exec_res = {
+                                "ok": True,
+                                "exit_code": 0,
+                                "target": img_res["path"],
+                                "artifact": img_res["path"],
+                                "output": json.dumps(img_res, ensure_ascii=False),
+                            }
+                        elif tc.name == "edit_image":
+                            img_res = await asyncio.to_thread(
+                                studio_edit_image,
+                                workspace,
+                                runtime_dir,
+                                str(args.get("input_path") or ""),
+                                str(args.get("output_path") or ""),
+                                prompt=str(args.get("prompt") or ""),
+                                negative_prompt=str(args.get("negative_prompt") or "blurry, lowres, watermark, deformed"),
+                                strength=float(args.get("strength") if args.get("strength") is not None else 0.55),
+                                steps=int(args.get("steps") or 6),
+                                cfg_scale=float(args.get("cfg_scale") if args.get("cfg_scale") is not None else 1.5),
+                                operations=args.get("operations") if isinstance(args.get("operations"), list) else None,
+                                threads=max(1, int(settings.num_thread or 4)),
+                                cancel_check=_is_cancelled,
+                            )
+                            exec_res = {
+                                "ok": True,
+                                "exit_code": 0,
+                                "target": img_res["path"],
+                                "artifact": img_res["path"],
+                                "output": json.dumps(img_res, ensure_ascii=False),
+                            }
                         else:
                             exec_res = await asyncio.to_thread(
                                 execute_project_action,

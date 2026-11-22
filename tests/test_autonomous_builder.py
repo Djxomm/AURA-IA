@@ -192,3 +192,13 @@ def test_manual_mode_asks_approval_for_run_command(tmp_path: Path):
         assert asked == ["exec"]
 
     asyncio.run(scenario())
+
+
+def test_maximo_reasoning_level_above_profundo_and_prompt():
+    from agente_ia.aura_api import effort_instruction
+    from agente_ia.chat_controls import LEVELS
+
+    assert list(LEVELS.keys()) == ["rapido", "equilibrado", "profundo", "maximo"]
+    s = AppSettings(thinking_effort="maximo")
+    instr = effort_instruction(s)
+    assert "MÁXIMO" in instr and "ortografía" in instr.lower()

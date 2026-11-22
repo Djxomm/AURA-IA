@@ -51,11 +51,37 @@ def discover(directories):
     return result
 
 
-def limits(path,settings):
-    """Cap working context/batch for large models; never load a model to inspect it."""
-    size=Path(path).stat().st_size/1024**3
-    update={}
-    if size>30:update={'num_ctx':min(settings.num_ctx,1024),'num_batch':16}
-    elif size>14:update={'num_ctx':min(settings.num_ctx,2048),'num_batch':32}
-    elif size>7:update={'num_ctx':min(settings.num_ctx,4096),'num_batch':32}
+def context_profile(path,hardware=None):
+    """Conservative recommendations, with a separate explicit experimental ceiling."""
+    from .hardware_profile import hardware_info
+    hardware=hardware if hardware is not None else hardware_info()
+    ram=hardware.get('ram_gib') or 8
+    try:size=Path(path).stat().st_size/1024**3;info=model_info(path)
+    except (OSError,ValueError):size=0;info={}
+    architecture=info.get('general.architecture','qwen2')
+    trained=info.get(architecture+'.context_length',32768)
+    if not isinstance(trained,int) or trained<512:trained=32768
+    maximum=32768 if ram>=15 else 8192
+    recommended=4096 if ram>=15 and hardware.get('cores',2)>2 else 2048
+    automatic=8192 if ram>=15 and size<7 else recommended
+    if size>30:recommended=1024;maximum=2048 if ram>=64 else 1024;automatic=recommended
+    elif size>14:recommended=2048;maximum=16384 if ram>=48 else 4096;automatic=recommended
+    elif size>7:
+        recommended=4096 if ram>=15 else 2048
+        maximum=32768 if ram>=32 else 16384 if ram>=15 else 4096
+        automatic=recommended
+    maximum=max(512,min(maximum,trained,32768))
+    return {'recommended':min(recommended,maximum),'maximum':maximum,'automatic':min(automatic,maximum)}
+
+
+def limits(path,settings,hardware=None):
+    """Honor manual context within the displayed model/RAM ceiling."""
+    profile=context_profile(path,hardware);size=Path(path).stat().st_size/1024**3
+    update={'num_ctx':min(settings.num_ctx,profile['maximum'])}
+    if size>30:update['num_batch']=16
+    elif size>7:update['num_batch']=32
     return settings.model_copy(update=update)
+
+
+def programming_settings(settings,enabled=True):
+    return settings.model_copy(update={'temperature':min(settings.temperature,.2)}) if enabled else settings

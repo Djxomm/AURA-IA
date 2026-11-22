@@ -322,6 +322,9 @@ class AgentEngine:
         else:
             raise WorkspaceError(f"Acción de escritura no soportada: {tc.name}")
 
+        from .code_preservation import validate_agent_change
+        try:validate_agent_change(path,orig,prop,whole_file=tc.name=='write_file')
+        except ValueError as error:raise WorkspaceError(str(error)) from error
         rel_path = workspace.to_rel_posix(workspace.resolve_safe_path(path, allow_write=True))
         return PendingProposal(
             id=f"prop_{uuid.uuid4().hex[:12]}",

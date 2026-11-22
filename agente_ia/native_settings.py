@@ -2,6 +2,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog,QHBoxLayout,QVBoxLayout,QWidget,QListWidget,QLabel,QStackedWidget,QScrollArea,QFormLayout,QCheckBox,QComboBox,QSpinBox,QDoubleSpinBox,QSlider,QPushButton,QDialogButtonBox,QLineEdit
 from .hardware_profile import hardware_info,recommended_settings
+from .model_library import context_profile
 
 class SettingsHub(QDialog):
     def __init__(self,owner):
@@ -21,13 +22,17 @@ class SettingsHub(QDialog):
         current=QLabel(owner.client.model.name);current.setWordWrap(True);model.addRow('Modelo actual',current);choose=QPushButton('Buscar modelo en la PC…');choose.clicked.connect(lambda:self.launch(owner.browse_chat_model));model.addRow(choose)
         form=page('Rendimiento','Para un i5 antiguo: modelo ligero y contexto de 2048–4096. Más contexto y modelos grandes necesitan más tiempo y memoria.')
         self.effort=QComboBox();self.effort.addItem('Rápido','rapido');self.effort.addItem('Equilibrado','equilibrado');self.effort.addItem('Profundo','profundo');self.effort.setCurrentIndex(self.effort.findData(s.thinking_effort));form.addRow('Razonamiento',self.effort)
-        self.length=QSpinBox();self.length.setRange(0,4096);self.length.setSingleStep(128);self.length.setSpecialValueText('Automático');self.length.setValue(s.max_predict_tokens);form.addRow('Longitud máxima',self.length)
-        self.context=QSlider(Qt.Orientation.Horizontal);self.context.setRange(2048,8192);self.context.setSingleStep(1024);self.context.setPageStep(1024);self.context.setValue(s.num_ctx);label=QLabel(str(s.num_ctx)+' tokens');self.context.valueChanged.connect(lambda value:label.setText(str(value)+' tokens'));self.context.valueChanged.connect(lambda value:self.context.setValue(round(value/1024)*1024));form.addRow('Contexto',self.context);form.addRow(label)
+        self.length=QSpinBox();self.length.setRange(0,16384);self.length.setSingleStep(128);self.length.setSpecialValueText('Automático');self.length.setValue(s.max_predict_tokens);form.addRow('Longitud máxima',self.length)
+        self.hardware=hardware_info();self.context_profile=context_profile(owner.client.model,self.hardware)
+        self.context=QSlider(Qt.Orientation.Horizontal);self.context.setRange(512,self.context_profile['maximum']);self.context.setSingleStep(1024);self.context.setPageStep(1024);self.context.setValue(s.num_ctx)
+        self.context_label=QLabel();self.context_label.setWordWrap(True)
+        self.context.valueChanged.connect(self.context_changed);self.context_changed(self.context.value());form.addRow('Contexto de programación',self.context);form.addRow(self.context_label)
         self.automatic=QCheckBox('Ampliar el contexto cuando haga falta');self.automatic.setChecked(owner.client.auto_context);form.addRow(self.automatic)
         self.accelerator=QComboBox();self.accelerator.addItem('Automática · CPU / GPU verificada','auto');self.accelerator.addItem('Solo procesador · i5 compatible','cpu');self.accelerator.addItem('Probar GPU Vulkan · Intel / NVIDIA','vulkan');self.accelerator.setCurrentIndex(max(0,self.accelerator.findData(getattr(owner.client,'acceleration','auto'))));form.addRow('Aceleración',self.accelerator)
         self.threads=QSpinBox();self.threads.setRange(1,64);self.threads.setValue(s.num_thread);form.addRow('Hilos del procesador',self.threads)
         self.temperature=QDoubleSpinBox();self.temperature.setRange(0,1.5);self.temperature.setSingleStep(.05);self.temperature.setValue(s.temperature);form.addRow('Creatividad',self.temperature)
-        self.hardware=hardware_info();machine=QLabel(self.hardware['cpu']+'\n'+str(self.hardware['cores'])+' núcleos · '+str(self.hardware['ram_gib'])+' GiB RAM');machine.setWordWrap(True);form.addRow('Este equipo',machine);recommend=QPushButton('Usar valores recomendados para esta PC');recommend.clicked.connect(self.recommend);form.addRow(recommend)
+        self.stable_code=QCheckBox('Programación estable: creatividad máxima de 0.20');self.stable_code.setChecked(owner.prefs.get('stable_code',True));form.addRow(self.stable_code)
+        machine=QLabel(self.hardware['cpu']+'\n'+str(self.hardware['cores'])+' núcleos · '+str(self.hardware['ram_gib'])+' GiB RAM');machine.setWordWrap(True);form.addRow('Este equipo',machine);recommend=QPushButton('Usar valores recomendados para esta PC');recommend.clicked.connect(self.recommend);form.addRow(recommend)
         voice=page('Voz','Dicta mensajes y escucha respuestas. La voz local funciona sin Internet; ElevenLabs es una opción adicional.')
         self.autovoice=QCheckBox('Leer las respuestas automáticamente');self.autovoice.setChecked(owner.auto_voice.isChecked());voice.addRow(self.autovoice);configure=QPushButton('Configurar voz y audio…');configure.clicked.connect(lambda:self.launch(owner.voice_settings));voice.addRow(configure);read=QPushButton('Leer última respuesta');read.clicked.connect(owner.speak);voice.addRow(read)
         memory=page('Memoria','Revisa lo que AURA recuerda y administra la caché del modelo. Borrar la caché no borra tus conversaciones.')
@@ -41,11 +46,22 @@ class SettingsHub(QDialog):
         self.sections.currentRowChanged.connect(self.stack.setCurrentIndex);self.sections.setCurrentRow(0)
         search.textChanged.connect(lambda text:[self.sections.item(i).setHidden(text.lower() not in self.sections.item(i).text().lower()) for i in range(self.sections.count())])
 
+    def context_changed(self,value):
+        snapped=max(self.context.minimum(),round(value/1024)*1024)
+        snapped=min(snapped,self.context.maximum())
+        if snapped!=value:self.context.setValue(snapped);return
+        profile=self.context_profile
+        message=f"{value:,} tokens · Recomendado: {profile['recommended']:,} · Máximo: {profile['maximum']:,}".replace(',', ' ')
+        if value>profile['recommended']:message+='\nExperimental: más RAM y más espera. No acelera las respuestas.'
+        message+='\nLa ampliación automática conserva un límite prudente; los valores mayores se eligen manualmente.'
+        self.context_label.setText(message)
+
     def recommend(self):
-        values=recommended_settings(self.hardware);self.threads.setValue(values['num_thread']);self.context.setValue(values['num_ctx']);self.length.setValue(values['max_predict_tokens'])
+        values=recommended_settings(self.hardware);self.threads.setValue(values['num_thread']);self.context.setValue(self.context_profile['recommended']);self.length.setValue(values['max_predict_tokens']);self.temperature.setValue(.2);self.stable_code.setChecked(True)
 
     def apply(self):
         w=self.owner;s=w.store.get_settings();w.store.save_settings(s.model_copy(update={'thinking_effort':self.effort.currentData(),'max_predict_tokens':self.length.value(),'num_ctx':self.context.value(),'num_thread':self.threads.value(),'temperature':self.temperature.value(),'tool_mode':'xml','num_batch':64}))
+        w.save_pref('stable_code',self.stable_code.isChecked())
         w.client.acceleration=self.accelerator.currentData();w.save_pref("acceleration",w.client.acceleration)
         w.client.auto_context=self.automatic.isChecked();w.save_pref('auto_context',self.automatic.isChecked());w.save_pref('intro',self.intro.isChecked());w.save_pref('floating',self.floating.isChecked());w.save_pref('animations',self.motion.isChecked());w.auto_voice.setChecked(self.autovoice.isChecked());w.floating.setVisible(self.floating.isChecked());w.refresh_chat_controls();self.accept()
     def launch(self,callback):self.apply();callback()

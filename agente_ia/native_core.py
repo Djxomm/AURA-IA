@@ -69,22 +69,28 @@ class NativeClient:
    except (OSError,ValueError,AttributeError):layers=0;size=0
    engine,gpu_args,self.backend_note=backend(self.runtime,self.data,self.acceleration,size,layers)
    try:return self._generate(settings,messages,callback,use_cache,engine,gpu_args)
-   except (ProviderError,OSError):
-    if not gpu_args or self.cancelled.is_set() or self.first_text is not None:raise
-    self.backend_note='GPU no disponible; continuando por CPU'
-    return self._generate(settings,messages,callback,use_cache,self.runtime/'motor',[])
+   except (ProviderError,OSError) as error:
+    if self.cancelled.is_set() or self.first_text is not None:raise
+    if gpu_args:
+     self.backend_note='GPU no disponible; continuando por CPU'
+     return self._generate(settings,messages,callback,False,self.runtime/'motor',[])
+    if use_cache and isinstance(error,ProviderError) and any(message in str(error) for message in ('El motor terminó con error','El modelo no produjo texto')):
+     self.backend_note+=' · recuperación sin caché'
+     return self._generate(settings,messages,callback,False,engine,[])
+    raise
  def _generate(self,settings,messages,callback,use_cache,engine=None,gpu_args=None):
   engine=engine or self.runtime/"motor";gpu_args=gpu_args or []
   self.cancelled.clear();self.first_text=None
   if not self.model.is_file():raise ProviderError('No se encontró el modelo GGUF.')
-  from .model_library import model_info
+  from .model_library import model_info,context_profile
   from .harmony_transport import prompt as harmony_prompt,HarmonyOutput
   harmony=model_info(self.model).get("general.architecture")=="gpt-oss"
   prompt=''.join('<|im_start|>'+str(x['role'])+'\n'+str(x.get('content','')).replace('\r','')+'<|im_end|>\n' for x in messages)+'<|im_start|>assistant\n'
   if harmony:prompt=harmony_prompt(messages,settings.thinking_effort)
   budget=settings.max_predict_tokens or {'rapido':256,'equilibrado':512,'profundo':1024}[settings.thinking_effort]
   effective=settings.num_ctx
-  if self.auto_context and self.model.stat().st_size<7*1024**3 and len(prompt)//2+128+min(budget,512)>effective and effective<8192:effective=8192
+  automatic=context_profile(self.model)['automatic']
+  if self.auto_context and len(prompt)//2+128+min(budget,512)>effective and effective<automatic:effective=automatic
   self.effective_context=effective
   if len(prompt)//2+96>=effective:raise ProviderError('Este texto supera el contexto disponible ('+str(effective)+' tokens). Conservé el historial: divide la especificación o usa un archivo con las partes necesarias. Puedes ajustar la barra de contexto; no es una cuota de uso.')
   budget=min(budget,max(32,effective-len(prompt)//2-64))
@@ -112,12 +118,16 @@ class NativeClient:
    if tail:answer+=tail;callback(tail)
    code=self.process.wait()
    if self.cancelled.is_set():raise ProviderError('Respuesta detenida por el usuario.')
-   if code:raise ProviderError('El motor terminó con error '+str(code)+'. Consulta motor-nativo.log.')
+   if code:
+    if use_cache:cache.unlink(missing_ok=True)
+    raise ProviderError('El motor terminó con error '+str(code)+'. Consulta motor-nativo.log.')
    if harmony_filter:
     tail=harmony_filter.finish()
     if tail:answer+=tail;callback(tail)
    answer=answer.replace('[end of text]','').strip()
-   if not answer:raise ProviderError('El modelo no produjo texto.')
+   if not answer:
+    if use_cache:cache.unlink(missing_ok=True)
+    raise ProviderError('El modelo no produjo texto.')
    return answer,time.monotonic()-start
   finally:
    p=self.process

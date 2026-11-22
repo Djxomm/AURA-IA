@@ -146,13 +146,13 @@ class ProjectRunner:
                     finally:
                         try:channel.put(None,timeout=.2)
                         except queue.Full:pass
-                threading.Thread(target=read,args=(self.process,),daemon=True).start();start=time.monotonic();timeout=False
+                reader=threading.Thread(target=read,args=(self.process,),daemon=True);reader.start();start=time.monotonic();timeout=False
                 while True:
                     if self.cancelled.is_set() or time.monotonic()-start>command.timeout:
                         timeout=not self.cancelled.is_set();self.stop()
                     try:line=channel.get(timeout=.1)
                     except queue.Empty:
-                        if self.process.poll() is not None:break
+                        if not reader.is_alive():break
                         continue
                     if line is None:break
                     logs.append(line);logs=logs[-40:];on_output(line.rstrip())

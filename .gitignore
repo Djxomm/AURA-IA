@@ -25,3 +25,11 @@ entrega/
 
 node_modules/
 frameworks/npm-cache.zip
+
+# Public training: keep generated data and candidate weights out of Git
+training/generated/
+training/runs/
+*.safetensors
+*.pt
+*.pth
+*.ckpt

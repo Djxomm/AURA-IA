@@ -31,7 +31,8 @@ def context_for(request,project,directories,max_chars=2400):
                 for block in re.split(r'\n\s*\n',content):
                     score=sum(term in block.lower() for term in terms)
                     if score:chunks.append((score,filename,block[:1100]))
-            text='\n['+str(item.get('title'))+' · '+str(item.get('version'))+']\n'+summary[:max(800,max_chars//2)]
+            guide=_read(root,item.get('coding_guide',''),4000) if item.get('coding_guide') else ''
+            text='\n['+str(item.get('title'))+' · '+str(item.get('version'))+']\n'+('REGLAS DE PROGRAMACIÓN:\n'+guide[:700]+'\n' if guide else '')+summary[:max(800,max_chars//2)]
             for score,filename,block in sorted(chunks,key=lambda x:x[0],reverse=True)[:2]:text+='\nFuente '+filename+': '+block
             candidates.append(text)
     if not candidates:return ''

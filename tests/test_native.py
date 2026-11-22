@@ -96,3 +96,23 @@ def test_native_cache_changes_when_cpu_engine_changes(tmp_path,monkeypatch):
   if changed:(tmp_path/'motor/ggml-cpu-haswell.dll').write_bytes(b'new-engine')
   c.generate(AppSettings(),[{'role':'user','content':'Hola'}],lambda x:None)
  assert seen[0]!=seen[1]
+
+
+@pytest.mark.parametrize('first_code',[0,1])
+def test_failed_cache_retries_once_without_cache_before_showing_text(tmp_path,monkeypatch,first_code):
+ import io,struct
+ from agente_ia.native_core import NativeClient
+ from agente_ia.config import AppSettings
+ model=tmp_path/'qwen.gguf';model.write_bytes(b'GGUF'+struct.pack('<IQQ',3,0,0));seen=[];cache_files=[]
+ class Process:
+  def __init__(self,args,**kwargs):
+   seen.append(args);self.code=first_code if len(seen)==1 else 0;self.stdout=io.BytesIO(b'' if len(seen)==1 else b'Listo')
+   if '--prompt-cache' in args:
+    path=Path(args[args.index('--prompt-cache')+1]);path.write_bytes(b'invalid-cache');cache_files.append(path)
+  def poll(self):return self.code
+  def wait(self,**kwargs):return self.code
+ monkeypatch.setattr('agente_ia.native_core.subprocess.Popen',Process)
+ client=NativeClient(tmp_path,tmp_path/'state',model);tokens=[]
+ result,_=client.generate(AppSettings(),[{'role':'user','content':'Hola'}],tokens.append)
+ assert result=='Listo' and ''.join(tokens)=='Listo' and len(seen)==2
+ assert '--prompt-cache' not in seen[1] and not cache_files[0].exists()

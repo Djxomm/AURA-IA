@@ -80,3 +80,14 @@ def test_coder_toolbars_keep_actions_accessible_at_small_width(tmp_path):
  extension=workspace.file_toolbar.findChild(QToolButton,'qt_toolbar_ext_button')
  assert extension is not None and extension.isVisible()
  workspace.close();owner.close();workspace.deleteLater();owner.deleteLater();application.processEvents()
+
+
+def test_extended_context_saves_and_flags_experimental(tmp_path,monkeypatch):
+ application=app();owner=ShellOwner(tmp_path);build_shell(owner,Path('agente_ia/static/assets'));monkeypatch.setattr('agente_ia.native_settings.hardware_info',lambda:{'cpu':'Test CPU','cores':4,'logical':8,'ram_gib':16})
+ dialog=SettingsHub(owner);assert dialog.context.maximum()==32768
+ dialog.context.setValue(16384);assert 'Experimental' in dialog.context_label.text()
+ dialog.length.setValue(8192);dialog.apply()
+ assert owner.store.get_settings().num_ctx==16384
+ assert owner.store.get_settings().max_predict_tokens==8192
+ assert owner.prefs['stable_code'] is True
+ owner.close();owner.deleteLater();application.processEvents()

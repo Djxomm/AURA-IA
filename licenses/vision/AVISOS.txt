@@ -1,0 +1,1 @@
+Lector visual: SmolVLM-500M-Instruct de HuggingFaceTB, conversión GGUF de ggml-org. Modelo Q8_0 y proyector F16, licencia Apache-2.0 según su ficha. Motor llama.cpp MIT. El reconocimiento de texto usa Windows.Media.Ocr del sistema operativo. Ninguna captura se envía a servicios externos. Las descripciones del modelo pueden contener errores.

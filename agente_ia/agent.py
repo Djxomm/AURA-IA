@@ -892,7 +892,11 @@ class AgentEngine:
                         if settings.autonomous_mode and tc.name == "pc_control":
                             approval_reason = f"{reason} (Acción directa sobre la PC: requiere tu aprobación de 1 clic.)"
                         elif settings.autonomous_mode and tc.name == "run_command":
-                            approval_reason = f"{reason} (Comando sensible: instala software, borra archivos, cierra procesos o altera remotos.)"
+                            from .android_tools import is_bootloader_or_flash_command
+                            if is_bootloader_or_flash_command(cmd_preview):
+                                approval_reason = f"{reason} (Modificación de bootloader/particiones o Custom ROM: verifica modelo exacto, respaldo EFS, ranura activa y batería antes de aceptar.)"
+                            else:
+                                approval_reason = f"{reason} (Comando sensible: instala software, borra archivos, cierra procesos o altera remotos.)"
                         exec_proposal = PendingProposal(
                             id=f"exec_{uuid.uuid4().hex[:12]}",
                             session_id=session_id,

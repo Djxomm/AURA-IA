@@ -58,32 +58,42 @@ def test_android_security_policy_blocks_brick_prompts_mutations_allows_safe_diag
         "adb reverse tcp:8000 tcp:8000",
         "fastboot devices",
         "fastboot getvar all",
+        "heimdall detect",
+        "heimdall print-pit --no-reboot",
         ".\\gradlew.bat :app:assembleDebug",
     ):
         assert android_command_policy(safe) == "safe_auto", f"Debió ser safe_auto: {safe}"
         assert command_requires_approval(safe) is False
         assert validate_command(safe) == safe
 
-    # Mutaciones de dispositivo o flasheo requieren aprobación de 1 clic
+    # Mutaciones de dispositivo, modificación de bootloader y flasheo de Custom ROM (Galaxy/Fastboot/Heimdall/Sideload)
+    # están HABILITADAS con aprobación obligatoria de 1 clic
     for risky in (
         "adb install -r app-debug.apk",
         "adb -s 192.168.1.45:5555 uninstall com.ejemplo.app",
         "adb shell pm clear com.ejemplo.app",
         "adb reboot bootloader",
+        "adb sideload custom-rom-galaxy.zip",
+        "fastboot flash bootloader bl.img",
+        "fastboot flash aboot aboot.img",
+        "fastboot flash vbmeta --disable-verity --disable-verification vbmeta.img",
         "fastboot flash boot boot.img",
         "fastboot flashing unlock",
+        "fastboot oem unlock",
         "fastboot reboot",
         "fastboot -w",
+        "heimdall flash --RECOVERY twrp.img --VBMETA vbmeta.img --no-reboot",
     ):
-        assert android_command_policy(risky) == "requires_approval", f"Debió requerir aprobación: {risky}"
+        assert android_command_policy(risky) == "requires_approval", f"Debió requerir aprobación (y estar habilitado): {risky}"
         assert command_requires_approval(risky) is True
+        assert validate_command(risky) == risky
 
-    # Particiones críticas de arranque/IMEI bloqueadas por seguridad
+    # Únicamente el borrado de calibración IMEI/EFS permanece bloqueado para proteger el teléfono
     for brick in (
-        "fastboot erase aboot",
         "fastboot erase efs",
-        "fastboot flash bootloader bl.img",
-        "fastboot erase persist",
+        "fastboot erase sec_efs",
+        "fastboot erase modemst1",
+        "fastboot format nvram",
     ):
         assert android_command_policy(brick) == "blocked", f"Debió bloquearse: {brick}"
         with pytest.raises(WorkspaceError):

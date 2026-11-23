@@ -47,7 +47,7 @@ def validate_command(command: str) -> str:
     from .android_tools import android_command_policy
     if android_command_policy(text) == "blocked":
         raise WorkspaceError(
-            "Comando Fastboot bloqueado por seguridad: modifica o borra particiones críticas de arranque/radio del dispositivo."
+            "Comando Fastboot bloqueado por seguridad: borra particiones de calibración/IMEI (EFS/modemst/nvram). La modificación de bootloader, vbmeta, boot, recovery y ROMs sí está habilitada con aprobación de 1 clic."
         )
     return text
 

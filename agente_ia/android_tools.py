@@ -12,14 +12,28 @@ from typing import Any
 
 
 _BLOCKED_FASTBOOT_PATTERNS = (
-    re.compile(r"(?i)\bfastboot\b.*\b(?:erase|format|flash)\s+(?:aboot|bootloader|xbl|xbl_a|xbl_b|sbl1|efs|persist|modemst1|modemst2|nvram|fsg|frp)\b"),
+    # Protege únicamente contra borrado irreversible de calibración de radio/IMEI;
+    # la modificación/flasheo de bootloader, vbmeta, boot, recovery y ROMs queda habilitada con aprobación de 1 clic.
+    re.compile(r"(?i)\bfastboot\b.*\b(?:erase|format)\s+(?:efs|sec_efs|modemst1|modemst2|nvram|fsg)\b"),
 )
 
 _APPROVAL_ANDROID_PATTERNS = (
     re.compile(r"(?i)\badb\b(?:\s+-s\s+\S+)?\s+(?:install|install-multiple|uninstall|reboot|root|unroot|remount|sideload|push|disable-verity|enable-verity)\b"),
     re.compile(r"(?i)\badb\b(?:\s+-s\s+\S+)?\s+shell\s+(?:rm\b|pm\s+(?:clear|uninstall|disable|disable-user|enable|grant|revoke)\b|settings\s+put\b|am\s+force-stop\b|reboot\b|svc\b)"),
-    re.compile(r"(?i)\bfastboot\b(?:\s+-s\s+\S+)?\s+(?:flash|erase|format|oem|flashing|reboot|boot|-w|update|set_active|continue)\b"),
+    re.compile(r"(?i)\bfastboot\b(?:\s+-s\s+\S+)?\s+(?:flash|erase|format|oem|flashing|reboot|boot|-w|update|set_active|continue|create-logical-partition|delete-logical-partition|resize-logical-partition)\b"),
+    re.compile(r"(?i)\bheimdall\b.*\b(?:flash|close-pc-screen)\b"),
 )
+
+
+def is_bootloader_or_flash_command(command: str) -> bool:
+    """Detecta comandos de modificación de bootloader, flasheo de particiones o sideload de Custom ROM."""
+    text = str(command or "").strip()
+    return bool(
+        re.search(
+            r"(?i)(?:\bfastboot\b.*\b(?:flash|erase|format|oem|flashing|boot|-w|update|set_active|logical-partition)\b|\bheimdall\b.*\bflash\b|\badb\b.*\bsideload\b)",
+            text,
+        )
+    )
 
 
 def android_command_policy(command: str) -> str:
@@ -84,6 +98,7 @@ def find_platform_tools(runtime: Path | None = None) -> dict[str, str | None]:
         "sdk_dir": str(sdk) if sdk else None,
         "adb": adb_path,
         "fastboot": fb_path,
+        "heimdall": shutil.which("heimdall"),
         "java": shutil.which("java"),
     }
 

@@ -39,6 +39,7 @@ BUILTIN_ACTIONS: tuple[tuple[str, str, str, str], ...] = (
     ("/kicad", "KiCad 10 · Esquemáticos y PCBs", "Crea diagramas electrónicos (.kicad_sch/.kicad_pro/.svg), ERC/DRC, Gerbers y STEP", "Diagramas"),
     ("/diagrama", "Diagramas de bloques, flujo y circuitos", "Genera diagramas vectoriales SVG, Mermaid y esquemáticos KiCad 10 offline", "Diagramas"),
     ("/entrenar", "Entrenar modelos IA locales (desde 0 / LLaMA Pro)", "Enseña, diseña y prepara pipelines locales para entrenar modelos desde 0 o subirlos de categoría", "IA / ML"),
+    ("/agentes", "Apps CLI · Claude Code / Codex / OpenCode / Ollama", "Abre el lanzador de agentes CLI externos dentro del proyecto AuraX", "Agente"),
     ("/plan", "Planificar arquitectura", "Diseña un plan paso a paso antes de tocar archivos", "Agente"),
     ("/skills", "Administrar habilidades", "Abre el panel de habilidades (importar / activar / quitar)", "Paneles"),
     ("/modelos", "Modelos y habilidades", "Abre la configuración de modelos locales probados", "Paneles"),
@@ -311,6 +312,19 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
             "auto_autonomous": True,
         }
 
+    if cmd in ("/agentes", "/apps"):
+        return {"type": "open_external_agents", "prompt": rest}
+    if cmd in ("/codex", "/claude", "/claude-code", "/opencode", "/qwen-code", "/copilot", "/ollama"):
+        agent_map = {
+            "/codex": "codex",
+            "/claude": "claude-code",
+            "/claude-code": "claude-code",
+            "/opencode": "opencode",
+            "/qwen-code": "qwen-code",
+            "/copilot": "copilot",
+            "/ollama": "ollama",
+        }
+        return {"type": "launch_external_agent", "agent_id": agent_map[cmd], "prompt": rest}
     if cmd == "/entrenar":
         task = rest or "Explícame paso a paso y prepara el pipeline local para entrenar un modelo LLM desde 0 (BPE + LlamaForCausalLM + GGUF) o escalar uno existente con LLaMA Pro."
         return {

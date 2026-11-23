@@ -84,8 +84,14 @@ class NativeClient:
   if not self.model.is_file():raise ProviderError('No se encontró el modelo GGUF.')
   from .model_library import model_info,context_profile
   from .harmony_transport import prompt as harmony_prompt,HarmonyOutput
-  harmony=model_info(self.model).get("general.architecture")=="gpt-oss"
-  prompt=''.join('<|im_start|>'+str(x['role'])+'\n'+str(x.get('content','')).replace('\r','')+'<|im_end|>\n' for x in messages)+'<|im_start|>assistant\n'
+  info=model_info(self.model)
+  arch=str(info.get("general.architecture") or "")
+  gname=str(info.get("general.name") or "").lower()
+  harmony=arch=="gpt-oss"
+  if arch=="llama" and "mateo-nano" in gname:
+   prompt=''.join(f"[{str(x['role']).upper()}]\n{str(x.get('content','')).replace(chr(13),'')}\n" for x in messages if x.get('role') in ('user','assistant'))+'[ASSISTANT]\n'
+  else:
+   prompt=''.join('<|im_start|>'+str(x['role'])+'\n'+str(x.get('content','')).replace('\r','')+'<|im_end|>\n' for x in messages)+'<|im_start|>assistant\n'
   if harmony:prompt=harmony_prompt(messages,settings.thinking_effort)
   budget=settings.max_predict_tokens or {'rapido':256,'equilibrado':512,'profundo':2048,'maximo':4096}[settings.thinking_effort]
   effective=settings.num_ctx

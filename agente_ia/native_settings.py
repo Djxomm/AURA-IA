@@ -1,9 +1,10 @@
 """Organized native settings, with editable controls rather than placeholder pages."""
+from pathlib import Path
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog,QHBoxLayout,QVBoxLayout,QWidget,QListWidget,QLabel,QStackedWidget,QScrollArea,QFormLayout,QCheckBox,QComboBox,QSpinBox,QDoubleSpinBox,QSlider,QPushButton,QDialogButtonBox,QLineEdit
+from PySide6.QtWidgets import QDialog,QHBoxLayout,QVBoxLayout,QWidget,QListWidget,QListWidgetItem,QLabel,QStackedWidget,QScrollArea,QFormLayout,QCheckBox,QComboBox,QSpinBox,QDoubleSpinBox,QSlider,QPushButton,QDialogButtonBox,QLineEdit,QFileDialog,QMessageBox
 from .chat_controls import model_label
 from .hardware_profile import hardware_info,recommended_settings
-from .model_library import context_profile
+from .model_library import context_profile,model_info,model_skill_profile
 
 class SettingsHub(QDialog):
     def __init__(self,owner):
@@ -19,10 +20,24 @@ class SettingsHub(QDialog):
         self.intro=QCheckBox('Reproducir la animación al iniciar');self.intro.setChecked(owner.prefs.get('intro',True));general.addRow(self.intro)
         self.motion=QCheckBox('Animaciones suaves del asistente');self.motion.setChecked(owner.prefs.get('animations',True));general.addRow(self.motion)
         general.addRow('Apariencia',QLabel('Azul oscuro · AURA'))
-        model=page('Modelos','El modelo y el nivel de razonamiento se eligen también desde la barra de escritura del chat.')
-        label=model_label(owner.client.model)
-        current_text=label if label==owner.client.model.name else f'{label} ({owner.client.model.name})'
-        current=QLabel(current_text);current.setWordWrap(True);model.addRow('Modelo actual',current);choose=QPushButton('Buscar modelo en la PC…');choose.clicked.connect(lambda:self.launch(owner.browse_chat_model));model.addRow(choose)
+        model=page('Modelos','Gestor de modelos locales GGUF: activa, agrega archivos o carpetas, revisa arquitectura/capas/contexto y administra tus modelos (AURA ANGEL 5.6, MATEO Pro, MATEO-Nano, Qwen, Llama, GPT-oss).')
+        self.current_model_label=QLabel('');self.current_model_label.setWordWrap(True);model.addRow('Modelo activo',self.current_model_label)
+        self.model_list=QListWidget();self.model_list.setMinimumHeight(210);self.model_list.setStyleSheet('QListWidget{background:#091523;border:1px solid #29405b;border-radius:8px;} QListWidget::item{padding:8px;}')
+        self.model_list.itemDoubleClicked.connect(lambda _item:self.activate_selected_model())
+        model.addRow(self.model_list)
+        self.model_detail=QLabel('Selecciona un modelo de la lista para ver arquitectura, capas y ruta.');self.model_detail.setWordWrap(True);self.model_detail.setStyleSheet('color:#93c5fd;font-size:12px;')
+        model.addRow(self.model_detail)
+        self.model_list.currentItemChanged.connect(self._on_model_item_changed)
+        mrow1=QHBoxLayout()
+        btn_use=QPushButton('Activar seleccionado');btn_use.clicked.connect(self.activate_selected_model)
+        btn_add=QPushButton('Agregar .gguf…');btn_add.clicked.connect(self.add_model_file)
+        btn_dir=QPushButton('Agregar carpeta…');btn_dir.clicked.connect(self.add_model_directory)
+        btn_scan=QPushButton('Escanear');btn_scan.clicked.connect(self.refresh_model_manager)
+        btn_rem=QPushButton('Quitar de lista');btn_rem.clicked.connect(self.remove_selected_model)
+        for b in (btn_use,btn_add,btn_dir,btn_scan,btn_rem):mrow1.addWidget(b)
+        mwrap=QWidget();mwrap.setLayout(mrow1);model.addRow(mwrap)
+        self.dirs_label=QLabel('');self.dirs_label.setWordWrap(True);self.dirs_label.setStyleSheet('color:#94a3b8;font-size:11px;');model.addRow('Carpetas escaneadas',self.dirs_label)
+        self.refresh_model_manager()
         form=page('Rendimiento','Para un i5 antiguo: modelo ligero y contexto de 2048–4096. Más contexto y modelos grandes necesitan más tiempo y memoria.')
         self.effort=QComboBox();self.effort.addItem('Rápido','rapido');self.effort.addItem('Equilibrado','equilibrado');self.effort.addItem('Profundo','profundo');self.effort.addItem('Máximo · 16K + razonamiento extendido','maximo');self.effort.setCurrentIndex(self.effort.findData(s.thinking_effort));form.addRow('Razonamiento',self.effort)
         self.length=QSpinBox();self.length.setRange(0,16384);self.length.setSingleStep(128);self.length.setSpecialValueText('Automático');self.length.setValue(s.max_predict_tokens);form.addRow('Longitud máxima',self.length)
@@ -42,13 +57,92 @@ class SettingsHub(QDialog):
         for text,callback in [('Administrar recuerdos…',owner.memory_panel),('Borrar caché del modelo',owner.clear_cache)]:
             b=QPushButton(text);b.clicked.connect(lambda checked=False,cb=callback:self.launch(cb));memory.addRow(b)
         projects=page('Proyecto y habilidades','El proyecto define la carpeta donde AURAX puede trabajar. Las habilidades añaden instrucciones para sus tareas.')
-        for text,callback in [('Cambiar carpeta del proyecto…',owner.project),('Administrar habilidades…',owner.skills_panel)]:
+        proj_actions=[('Cambiar carpeta del proyecto…',owner.project),('Administrar habilidades…',owner.skills_panel)]
+        if hasattr(owner,'open_external_agents'):proj_actions.append(('Apps CLI (Codex / Claude Code / OpenCode / Ollama)…',owner.open_external_agents))
+        for text,callback in proj_actions:
             b=QPushButton(text);b.clicked.connect(lambda checked=False,cb=callback:self.launch(cb));projects.addRow(b)
         security=page('Cambios y seguridad','AURAX pide revisar los cambios antes de escribir archivos salvo que actives el modo constructor autónomo. Todo cambio aplicado queda registrado para deshacerlo.')
         self.autonomous=QCheckBox('Modo constructor autónomo: editar, probar y compilar automáticamente dentro del proyecto');self.autonomous.setChecked(bool(s.autonomous_mode));security.addRow(self.autonomous)
         b=QPushButton('Revisar cambios y deshacer…');b.clicked.connect(lambda:self.launch(owner.changes));security.addRow(b)
         self.sections.currentRowChanged.connect(self.stack.setCurrentIndex);self.sections.setCurrentRow(0)
         search.textChanged.connect(lambda text:[self.sections.item(i).setHidden(text.lower() not in self.sections.item(i).text().lower()) for i in range(self.sections.count())])
+
+    def _collect_models(self):
+        if hasattr(self.owner,'list_available_models'):
+            return self.owner.list_available_models()
+        paths=[Path(self.owner.client.model)]
+        for p in (self.owner.prefs.get('models') or []):
+            if isinstance(p,str) and Path(p).is_file():paths.append(Path(p))
+        return list(dict.fromkeys(p.resolve() for p in paths if p.is_file()))
+
+    def refresh_model_manager(self):
+        cur=Path(self.owner.client.model).resolve() if Path(self.owner.client.model).is_file() else Path(self.owner.client.model)
+        lbl=model_label(cur)
+        self.current_model_label.setText(lbl if lbl==cur.name else f'{lbl} ({cur.name})')
+        self.model_list.clear()
+        for path in self._collect_models():
+            rp=Path(path).resolve()
+            prof=model_skill_profile(rp)
+            sz_gb=round(rp.stat().st_size/(1024**3),2) if rp.is_file() else 0.0
+            active_tag='✓ ACTIVO · ' if rp==cur else ''
+            title=f"{active_tag}{model_label(rp)}  [{sz_gb:.2f} GB] — {prof['skills']}"
+            item=QListWidgetItem(title)
+            item.setData(Qt.ItemDataRole.UserRole,str(rp))
+            self.model_list.addItem(item)
+            if rp==cur:self.model_list.setCurrentItem(item)
+        dirs=self.owner.prefs.get('model_directories') or []
+        self.dirs_label.setText(' | '.join(str(d) for d in dirs) if dirs else '(solo modelos integrados y registrados)')
+
+    def _on_model_item_changed(self,current,_previous=None):
+        if current is None:self.model_detail.setText('Selecciona un modelo de la lista.');return
+        rp=Path(current.data(Qt.ItemDataRole.UserRole))
+        try:
+            info=model_info(rp)
+            arch=str(info.get('general.architecture','?'))
+            layers=info.get(f'{arch}.block_count','?')
+            ctx=info.get(f'{arch}.context_length','?')
+            sz_gb=round(rp.stat().st_size/(1024**3),2)
+            self.model_detail.setText(f'Arquitectura: {arch} · Capas: {layers} · Contexto nativo: {ctx} · Tamaño: {sz_gb:.2f} GB\nRuta: {rp}')
+        except Exception as exc:
+            self.model_detail.setText(f'Ruta: {rp}\nDetalle GGUF: {exc}')
+
+    def activate_selected_model(self):
+        item=self.model_list.currentItem()
+        if item is None:return
+        path=item.data(Qt.ItemDataRole.UserRole)
+        self.owner.select_model(path)
+        self.context_profile=context_profile(self.owner.client.model,self.hardware)
+        self.context.setMaximum(self.context_profile['maximum'])
+        self.context_changed(self.context.value())
+        self.refresh_model_manager()
+
+    def add_model_file(self):
+        path,_=QFileDialog.getOpenFileName(self,'Agregar modelo GGUF',str(Path(self.owner.client.model).parent),'Modelos (*.gguf)')
+        if not path:return
+        self.owner.select_model(path)
+        self.refresh_model_manager()
+
+    def add_model_directory(self):
+        folder=QFileDialog.getExistingDirectory(self,'Agregar carpeta de modelos GGUF',str(Path(self.owner.client.model).parent))
+        if not folder:return
+        dirs=list(self.owner.prefs.get('model_directories') or [])
+        if folder not in dirs:
+            dirs.append(folder)
+            self.owner.save_pref('model_directories',dirs)
+        self.owner.refresh_chat_controls()
+        self.refresh_model_manager()
+
+    def remove_selected_model(self):
+        item=self.model_list.currentItem()
+        if item is None:return
+        target=str(Path(item.data(Qt.ItemDataRole.UserRole)).resolve())
+        if target==str(Path(self.owner.client.model).resolve()):
+            QMessageBox.information(self,'Modelos','No puedes quitar el modelo actualmente activo. Activa otro primero.')
+            return
+        registered=[p for p in (self.owner.prefs.get('models') or []) if isinstance(p,str) and str(Path(p).resolve())!=target]
+        self.owner.save_pref('models',registered)
+        self.owner.refresh_chat_controls()
+        self.refresh_model_manager()
 
     def context_changed(self,value):
         snapped=max(self.context.minimum(),round(value/1024)*1024)

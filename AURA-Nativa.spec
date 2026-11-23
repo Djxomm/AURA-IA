@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('agente_ia/static/assets', 'agente_ia/static/assets')]
 binaries = []
-hiddenimports = ['sqlalchemy.dialects.sqlite.pysqlite','sqlalchemy.dialects.postgresql.pg8000','sqlalchemy.dialects.mysql.pymysql','sqlalchemy.dialects.mysql.mariadb','sqlalchemy.dialects.mssql.pyodbc','sqlalchemy.dialects.oracle.oracledb','pg8000','pymysql','pyodbc','oracledb']
+hiddenimports = ['sqlalchemy.dialects.sqlite.pysqlite','sqlalchemy.dialects.postgresql.pg8000','sqlalchemy.dialects.mysql.pymysql','sqlalchemy.dialects.mysql.mariadb','sqlalchemy.dialects.mssql.pyodbc','sqlalchemy.dialects.oracle.oracledb','pg8000','pymysql','pyodbc','oracledb','agente_ia.video_studio','agente_ia.diagram_studio','agente_ia.android_tools','agente_ia.pc_control','agente_ia.slash_palette','agente_ia.native_terminal','agente_ia.web_research','agente_ia.image_studio','agente_ia.external_agents']
 tmp_ret = collect_all('vosk')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('sounddevice')

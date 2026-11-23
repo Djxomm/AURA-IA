@@ -4,7 +4,7 @@ import os,re,shutil,sys,uuid
 from pathlib import Path
 from PySide6.QtCore import Qt,Signal,QProcess,QProcessEnvironment,QTimer
 from PySide6.QtGui import QFont,QSyntaxHighlighter,QTextCharFormat,QColor
-from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLabel,QSplitter,QTreeView,QFileSystemModel,QTabWidget,QPlainTextEdit,QInputDialog,QMessageBox,QDialog,QDialogButtonBox,QMenu,QToolBar
+from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLabel,QSplitter,QTreeView,QFileSystemModel,QTabWidget,QPlainTextEdit,QInputDialog,QMessageBox,QDialog,QDialogButtonBox,QMenu,QToolBar,QLineEdit,QFrame,QSizePolicy
 from .workspace import SafeWorkspace,compute_file_hash,build_diff,WorkspaceError
 
 class CodeColors(QSyntaxHighlighter):
@@ -20,8 +20,8 @@ class CodeEditor(QPlainTextEdit):
 class AuraxWorkspace(QWidget):
  attach_requested=Signal(str)
  def __init__(self,owner,runtime):
-  super().__init__();self.owner=owner;self.runtime=Path(runtime);self.workspace=SafeWorkspace(owner.store.get_settings().workspace_path);self.process=QProcess(self);self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels);self.process.readyReadStandardOutput.connect(self.read_output);self.process.finished.connect(self.finished);self.process.errorOccurred.connect(lambda error:self.console.appendPlainText('No se pudo ejecutar el proceso: '+self.process.errorString()));self.timeout=QTimer(self);self.timeout.setSingleShot(True);self.timeout.timeout.connect(self.stop_process);self.web_url=None;self.web_preview=None;self.web_preview_opened=False
-  layout=QVBoxLayout(self);layout.setContentsMargins(8,8,8,8);title=QLabel('QbitX · Proyecto y herramientas');title.setFont(QFont('Segoe UI',15,QFont.Weight.Bold));titlebar=QHBoxLayout();titlebar.addWidget(title,1);import_code=QPushButton('Revisar respuesta');import_code.clicked.connect(self.import_response);titlebar.addWidget(import_code);layout.addLayout(titlebar);self.path_label=QLabel(str(self.workspace.root));self.path_label.setWordWrap(True);layout.addWidget(self.path_label)
+  super().__init__();self.owner=owner;self.runtime=Path(runtime);self.workspace=SafeWorkspace(owner.store.get_settings().workspace_path);self.process=QProcess(self);self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels);self.process.readyReadStandardOutput.connect(self.read_output);self.process.finished.connect(self.finished);self.process.errorOccurred.connect(lambda error:self.console.appendPlainText('No se pudo ejecutar el proceso: '+self.process.errorString()));self.timeout=QTimer(self);self.timeout.setSingleShot(True);self.timeout.timeout.connect(self.stop_process);self.web_url=None;self.web_preview=None;self.web_preview_opened=False;self.last_exit_code=0;self.last_console_output=''
+  layout=QVBoxLayout(self);layout.setContentsMargins(8,8,8,8);title=QLabel('QbitX · Proyecto y herramientas');title.setFont(QFont('Segoe UI',15,QFont.Weight.Bold));title.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Fixed);titlebar=QHBoxLayout();titlebar.addWidget(title,1);import_code=QPushButton('Revisar respuesta');import_code.clicked.connect(self.import_response);titlebar.addWidget(import_code);layout.addLayout(titlebar);self.path_label=QLabel(str(self.workspace.root));self.path_label.setWordWrap(True);self.path_label.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred);layout.addWidget(self.path_label)
   toolbar=QToolBar();toolbar.setMovable(False);toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly);self.file_toolbar=toolbar
   for text,fn in [('Proyecto',owner.project),('Nuevo',self.new_menu),('Guardar',self.save_current),('Adjuntar a AURAX',self.attach),('Proyecto web',self.web_menu)]:
    toolbar.addAction(text,fn)
@@ -29,10 +29,44 @@ class AuraxWorkspace(QWidget):
   for column in (1,2,3):self.tree.hideColumn(column)
   self.tabs=QTabWidget();self.tabs.setTabsClosable(True);self.tabs.tabCloseRequested.connect(self.close_tab);split.addWidget(self.tree);split.addWidget(self.tabs);split.setSizes([150,420]);layout.addWidget(split,1)
   row=QToolBar();row.setMovable(False);row.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly);self.run_toolbar=row
-  for text,kind in [('Verificar','check'),('Ejecutar','run'),('Compilar','build'),('Crear instalador','installer')]:
+  for text,kind in [('Verificar','check'),('Ejecutar','run'),('Compilar','build'),('Probar','test'),('Crear instalador','installer')]:
    row.addAction(text,lambda checked=False,kind=kind:self.run(kind))
+  self.repair_action=row.addAction('Reparar error en chat',self.send_error_to_chat)
+  self.repair_action.setEnabled(False)
+  row.addAction('Apps CLI',self.open_external_apps)
+  row.addAction('💬 Globo',self.toggle_bubble_bar)
   row.addAction('Detener',self.stop_process);layout.addWidget(row)
+  # Globo directo de instrucciones dentro de AURAX -> envía tus palabras exactas al chat
+  self.bubble_frame=QFrame();self.bubble_frame.setObjectName('auraxInlineBubble');self.bubble_frame.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Fixed)
+  self.bubble_frame.setStyleSheet('QFrame#auraxInlineBubble{background:#0e2038;border:1px solid #38bdf8;border-radius:10px;} QLineEdit{background:#091526;color:#f8fafc;border:1px solid #2b4c73;border-radius:6px;padding:6px 10px;} QPushButton{background:#0284c7;color:#ffffff;border:none;border-radius:6px;padding:6px 12px;font-weight:600;}')
+  bl=QHBoxLayout(self.bubble_frame);bl.setContentsMargins(8,6,8,6);bl.setSpacing(6)
+  self.bubble_input=QLineEdit();self.bubble_input.setMinimumWidth(60);self.bubble_input.setPlaceholderText('💬 Globo AURAX: tu instrucción directa al chat…')
+  self.bubble_input.returnPressed.connect(self.send_bubble_instruction)
+  bubble_send=QPushButton('Enviar');bubble_send.clicked.connect(self.send_bubble_instruction)
+  bl.addWidget(self.bubble_input,1);bl.addWidget(bubble_send)
+  layout.addWidget(self.bubble_frame)
   self.console=QPlainTextEdit();self.console.setReadOnly(True);self.console.setMaximumBlockCount(1500);self.console.setMaximumHeight(175);self.console.setPlaceholderText('Consola de AURAX: aquí aparecen comandos, errores y resultados reales.');self.console.setFont(QFont('Consolas',10));self.console.setStyleSheet('font-family:Consolas;font-size:12px;');layout.addWidget(self.console)
+ def toggle_bubble_bar(self):
+  vis=not self.bubble_frame.isVisible();self.bubble_frame.setVisible(vis)
+  if vis:self.bubble_input.setFocus()
+ def open_external_apps(self):
+  if hasattr(self.owner,'open_external_agents'):self.owner.open_external_agents(self.bubble_input.text().strip())
+ def send_bubble_instruction(self):
+  text=self.bubble_input.text().strip()
+  if not text:self.bubble_input.setFocus();return
+  self.bubble_input.clear()
+  if hasattr(self.owner,'send_from_aurax_bubble'):
+   self.owner.send_from_aurax_bubble(text,include_file=True,include_error=self.last_exit_code not in (0,None),autonomous=True)
+  else:
+   self.owner.input.setPlainText(text);self.owner.send()
+ def send_error_to_chat(self):
+  tail=(self.last_console_output or self.console.toPlainText())[-1500:].strip()
+  act=getattr(self,'check_action','build');tgt=getattr(self,'check_path','.')
+  msg=f'Corrige el error real de {act} en {tgt} y vuelve a compilar/verificar hasta lograr código de salida 0.'
+  if hasattr(self.owner,'send_from_aurax_bubble'):
+   self.owner.send_from_aurax_bubble(msg,include_file=True,include_error=True,autonomous=True,extra_error=tail)
+  else:
+   self.owner.input.setPlainText(msg+'\n\nError real:\n'+tail);self.owner.send()
  def message(self,text):QMessageBox.warning(self,'AURAX',str(text))
  def set_project(self,path):
   root=Path(path).resolve()
@@ -119,7 +153,9 @@ class AuraxWorkspace(QWidget):
  def run(self,kind):
   editor=self.tabs.currentWidget()
   self.check_action=kind;self.check_path=editor.path if editor else "."
-  if kind in {'check','run','build'}:
+  self.last_console_output='';self.last_exit_code=0
+  if hasattr(self,'repair_action'):self.repair_action.setEnabled(False)
+  if kind in {'check','run','build','test'}:
    try:
     from .framework_tools import find_web_project
     target=self.workspace.resolve_safe_path(editor.path) if editor else None
@@ -128,9 +164,30 @@ class AuraxWorkspace(QWidget):
     if project and web_file and (project.label!='Proyecto npm' or ('build' in project.scripts and 'dev' in project.scripts)):
      self.framework_action(kind,project);return
    except Exception as error:self.message(error);return
-  if editor is None:self.message('Abre un archivo del proyecto para verificarlo, ejecutarlo o compilarlo.');return
   if self.owner.busy or self.owner.warming:self.message('Espera a que AURA termine su tarea.');return
   if self.process.state()!=QProcess.ProcessState.NotRunning:self.message('Ya hay un proceso activo.');return
+  # Soporte multi-proyecto estilo Codex/Claude Code (.spec, Gradle/Android, Cargo/Rust, Go, .NET, pytest)
+  if kind!='installer':
+   try:
+    from .project_actions import choose_target,plan as build_plan
+    tgt=self.workspace.resolve_safe_path(editor.path) if editor else None
+    ext=tgt.suffix.lower() if tgt else ''
+    is_modern_project=(tgt is None or ext in {'.spec','.kt','.gradle','.rs','.go','.cs','.csproj','.sln'} or kind=='test')
+    if is_modern_project:
+     if editor is not None and (editor.base is None or editor.document().isModified()):
+      if not self.save_current():return
+     chosen=tgt if tgt is not None else choose_target(self.workspace.root,kind,None)
+     cmds=build_plan(self.runtime,self.workspace.root,chosen,kind)
+     if cmds:
+      cmd=cmds[0]
+      display=str(cmd.program)+' '+' '.join(cmd.arguments)
+      if QMessageBox.question(self,'AURAX · '+cmd.label,'Se ejecutará en el proyecto:\n\n'+display)!=QMessageBox.StandardButton.Yes:return
+      env=QProcessEnvironment.systemEnvironment();env.insert('PYTHONUTF8','1');env.insert('PYTHONIOENCODING','utf-8');env.insert('PATH',str(cmd.program.parent)+os.pathsep+env.value('PATH'))
+      self.process.setProcessEnvironment(env);self.process.setWorkingDirectory(str(cmd.cwd));self.console.appendPlainText('> '+display);self.process.start(str(cmd.program),cmd.arguments);self.timeout.start(cmd.timeout*1000);return
+   except Exception:
+    if editor is None:
+     self.message('Abre un archivo del proyecto o escribe tu orden en el Globo AURAX para compilar/probar con el agente autónomo.');return
+  if editor is None:self.message('Abre un archivo del proyecto para verificarlo, ejecutarlo o compilarlo.');return
   if Path(editor.path).suffix.lower() in {'.js','.mjs','.cjs','.java','.php','.html','.htm'} and kind!='installer':
    self.run_language(editor,kind);return
   if Path(editor.path).suffix.lower() in {'.cpp','.cc','.cxx','.c'} and kind!='installer':
@@ -246,7 +303,10 @@ class AuraxWorkspace(QWidget):
   if QMessageBox.question(self,'AURAX · Crear instalador','Compilar este script puede ejecutar instrucciones de su autor. Revisa primero el contenido.\n\n'+command)!=QMessageBox.StandardButton.Yes:return
   self.process.setWorkingDirectory(str(self.workspace.root));self.console.appendPlainText('> '+command);self.process.start(str(compiler),[target]);self.timeout.start(300000)
  def read_output(self):
-  output=bytes(self.process.readAllStandardOutput()).decode('utf-8','replace');output=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',output);self.console.appendPlainText(output.rstrip())
+  output=bytes(self.process.readAllStandardOutput()).decode('utf-8','replace');output=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',output)
+  if output:
+   self.last_console_output=(self.last_console_output+output)[-4000:]
+   self.console.appendPlainText(output.rstrip())
   if self.web_url and not self.web_preview_opened and self.web_url in self.console.toPlainText():self.open_web_preview()
  def open_web_preview(self):
   if not self.web_url:self.message('Pulsa Ejecutar en el proyecto web para iniciar su vista previa.');return
@@ -255,10 +315,12 @@ class AuraxWorkspace(QWidget):
   from PySide6.QtCore import QUrl
   preview=BrowserWindow(self.owner);self.web_preview=preview;self.web_preview_opened=True;preview.destroyed.connect(lambda:setattr(self,'web_preview',None));preview.setWindowTitle('AURAX · Vista previa del proyecto web');preview.view.setUrl(QUrl(self.web_url));preview.show()
  def finished(self,code,status):
-  self.timeout.stop();self.read_output();self.web_url=None;self.console.appendPlainText('Proceso terminado · código de salida: '+str(code))
+  self.timeout.stop();self.read_output();self.web_url=None;self.last_exit_code=code;self.console.appendPlainText('Proceso terminado · código de salida: '+str(code))
+  if hasattr(self,'repair_action'):self.repair_action.setEnabled(code!=0)
+  if code!=0:self.console.appendPlainText('Tip: pulsa «Reparar error en chat» o escribe en el 💬 Globo AURAX para corregir y recompilar en automático.')
   coordinator=getattr(getattr(self.owner,'engine',None),'coordinator',None)
   if coordinator is not None and self.owner.sid:
-   coordinator.execution(self.owner.sid,str(self.workspace.root),getattr(self,'check_action','proceso'),getattr(self,'check_path','.'),code)
+   coordinator.execution(self.owner.sid,str(self.workspace.root),getattr(self,'check_action','proceso'),getattr(self,'check_path','.'),code,output=self.last_console_output)
 
  def stop_process(self):
   self.web_url=None

@@ -47,6 +47,8 @@ def metadata(path):
 def profile(path):
     info=metadata(path);architecture=info.get('general.architecture','')
     if architecture=='gemma4':return 'nemotron',info
-    if architecture=='qwen2':
+    if architecture in {'qwen2','qwen3'}:
         return ('qwen' if info.get('tokenizer.chat_template') or 'instruct' in Path(path).name.lower() else 'qwen_base'),info
+    if architecture in {'llama','mistral','phi3','deepseek2','gpt-oss'}:
+        return architecture,info
     raise ValueError('Arquitectura no admitida: '+architecture)

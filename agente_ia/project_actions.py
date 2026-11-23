@@ -4,7 +4,9 @@ from pathlib import Path
 import os
 import queue
 import re
+import shutil
 import subprocess
+import sys
 import threading
 import time
 import unicodedata
@@ -38,26 +40,46 @@ class Command:
 
 def choose_target(project, request, preferred=None):
     workspace=SafeWorkspace(str(project))
-    explicit=re.findall(r'(?<![\w./\\-])([\w./\\-]+\.(?:py|cpp|cxx|cc|c|java|php|mjs|js|html|iss|exe))\b',request,re.I)
+    explicit=re.findall(r'(?<![\w./\\-])([\w./\\-]+\.(?:py|spec|cpp|cxx|cc|c|java|kt|php|mjs|js|ts|html|iss|exe|csproj|sln))\b',request,re.I)
     for name in [*explicit,preferred]:
         if name:
             path=workspace.resolve_safe_path(str(name))
             if path.is_file():return path
             if name in explicit:raise ValueError('No existe el archivo solicitado: '+str(name))
-    for name in ('main.py','app.py','main.cpp','main.c','Main.java','index.js','index.php','index.html'):
+    for name in ('main.py','app.py','native_launcher.py','main.cpp','main.c','Main.java','index.js','index.php','index.html'):
         path=workspace.root/name
         if path.is_file():return workspace.resolve_safe_path(name)
-    files=[p for p in workspace.root.iterdir() if p.is_file() and p.suffix.lower() in {'.py','.c','.cpp','.cxx','.cc','.java','.php','.js','.iss'}]
+    specs=sorted(workspace.root.glob('*.spec'))
+    if len(specs)==1:return workspace.resolve_safe_path(specs[0].name)
+    files=[p for p in workspace.root.iterdir() if p.is_file() and p.suffix.lower() in {'.py','.spec','.c','.cpp','.cxx','.cc','.java','.php','.js','.iss','.csproj','.sln'}]
     if len(files)==1:return workspace.resolve_safe_path(files[0].name)
-    if (workspace.root/'package.json').is_file():return None
+    for marker in ('package.json','gradlew.bat','Cargo.toml','go.mod','pyproject.toml'):
+        if (workspace.root/marker).is_file():return None
+    if list(workspace.root.glob('*.csproj')) or list(workspace.root.glob('*.sln')) or (workspace.root/'tests').is_dir():
+        return None
     raise ValueError('Abre el archivo en QbitX o indica su nombre: por ejemplo «compila main.py». No ejecuté ningún archivo.')
+
+
+def _resolve_python(runtime: Path) -> Path:
+    bundled = runtime / 'herramientas/python/python.exe'
+    if bundled.is_file() or bundled.parent.is_dir():
+        return bundled
+    if not getattr(sys, 'frozen', False):
+        return Path(sys.executable)
+    found = shutil.which('python') or shutil.which('python3')
+    return Path(found) if found else bundled
+
+
+def _resolve_tool(name: str) -> Path | None:
+    hit = shutil.which(name)
+    return Path(hit) if hit else None
 
 
 def plan(runtime, project, target, action):
     runtime,project=Path(runtime).resolve(),Path(project).resolve()
     if target and not Path(target).resolve().is_relative_to(project):raise ValueError('El archivo está fuera del proyecto.')
     from .framework_tools import find_web_project,npm_command
-    web=find_web_project(project,target) if not target or target.suffix.lower() in {'.js','.html','.json'} else None
+    web=find_web_project(project,target) if not target or target.suffix.lower() in {'.js','.ts','.tsx','.jsx','.html','.json'} else None
     if web:
         if action=='test':
             if 'test' not in web.scripts:raise ValueError('package.json no tiene un script test; no declararé pruebas aprobadas.')
@@ -65,10 +87,42 @@ def plan(runtime, project, target, action):
             if 'vitest' in web.scripts['test']:args+=['--','--run']
         else:program,args,_=npm_command(runtime,web,action)
         return [Command(program,args,web.root,'Proyecto web · '+action,3600 if action=='run' else 600)]
+
+    # Proyectos multiarchivo de arquitectura estándar (Android Gradle, Rust, Go, .NET, Pytest)
+    if target is None or target.suffix.lower() in {'.kt','.gradle','.rs','.go','.cs','.csproj','.sln'}:
+        gradlew = project / 'gradlew.bat'
+        if gradlew.is_file():
+            task = {'build': ':app:assembleDebug', 'test': 'testDebugUnitTest', 'check': ':app:compileDebugKotlin', 'run': ':app:installDebug'}.get(action, ':app:assembleDebug')
+            return [Command(gradlew, [task], project, 'Android Gradle · ' + action, 900)]
+        if (project / 'Cargo.toml').is_file():
+            cargo = _resolve_tool('cargo')
+            if cargo:
+                sub = {'build': ['build'], 'test': ['test'], 'check': ['check'], 'run': ['run']}.get(action, ['build'])
+                return [Command(cargo, sub, project, 'Rust Cargo · ' + action, 600)]
+        if (project / 'go.mod').is_file():
+            go = _resolve_tool('go')
+            if go:
+                sub = {'build': ['build', './...'], 'test': ['test', './...'], 'check': ['vet', './...'], 'run': ['run', '.']}.get(action, ['build', './...'])
+                return [Command(go, sub, project, 'Go · ' + action, 600)]
+        if list(project.glob('*.csproj')) or list(project.glob('*.sln')) or (target and target.suffix.lower() in {'.csproj', '.sln', '.cs'}):
+            dotnet = _resolve_tool('dotnet')
+            if dotnet:
+                sub = {'build': ['build'], 'test': ['test'], 'check': ['build', '--no-incremental'], 'run': ['run']}.get(action, ['build'])
+                return [Command(dotnet, sub, project, '.NET · ' + action, 600)]
+        if target is None and ((project / 'tests').is_dir() or (project / 'pyproject.toml').is_file()):
+            python = _resolve_python(runtime)
+            if action == 'test':
+                return [Command(python, ['-m', 'pytest', 'tests', '-q'] if (project / 'tests').is_dir() else ['-m', 'pytest', '-q'], project, 'Pruebas Python', 300)]
+            if action == 'check':
+                return [Command(python, ['-m', 'compileall', '-q', '.'], project, 'Verificación Python', 180)]
     if target is None:raise ValueError('Selecciona un archivo del proyecto.')
     target=Path(target).resolve();suffix=target.suffix.lower();output=project/'dist'/(target.stem+'.exe')
+    if suffix=='.spec':
+        python=_resolve_python(runtime)
+        if action!='build':raise ValueError('Un archivo .spec de PyInstaller se compila con Compilar.')
+        return [Command(python,['-m','PyInstaller','--noconfirm',str(target)],project,'PyInstaller · spec',900)]
     if suffix=='.py':
-        python=runtime/'herramientas/python/python.exe'
+        python=_resolve_python(runtime)
         if action=='test':
             tests=project/'tests'
             if tests.is_dir() and tests.resolve().is_relative_to(project) or list(project.glob('test_*.py')):

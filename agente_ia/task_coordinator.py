@@ -24,6 +24,7 @@ class TaskCoordinator:
                      'request': request[:2400], 'status': 'working',
                      'files': previous.get('files', [])[-24:],
                      'evidence': previous.get('evidence', [])[-6:],
+                     'last_exec': previous.get('last_exec'),
                      'steps': ['Inspeccionar archivos', 'Aplicar cambios revisados', 'Comprobar sintaxis', 'Probar y compilar: requiere ejecución explícita']}
             self.save(session, project, state)
             return state
@@ -43,24 +44,37 @@ class TaskCoordinator:
             state['status'] = 'attention'
         self.save(session, project, state)
 
-    def execution(self, session, project, action, path, code):
+    def execution(self, session, project, action, path, code, output=''):
         with self.lock:
             row=self.db.execute('SELECT project,state FROM qbitx_tasks WHERE session=?',(session,)).fetchone()
             if not row or row[0]!=project:
                 return
             state=json.loads(row[1])
-            note=f'Proceso autorizado: {action} {path}; salida {code}. No demuestra por sí solo corrección funcional.'
+            note=f'Proceso autorizado: {action} {path}; salida {code}.'
+            if output:
+                tail=str(output).strip()[-280:].replace('\n',' | ')
+                note+=f' Salida: {tail}'
             state['evidence']=(state.get('evidence',[])+[note[:400]])[-6:]
+            state['last_exec']={'action':action,'path':path,'exit_code':code,'output':str(output).strip()[-800:]}
             state['status']='review_pending' if code==0 else 'attention'
             self.save(session, project, state)
 
     @staticmethod
     def context(state):
-        summary = {'files': state.get('files', [])[-12:], 'evidence': [x[:180] for x in state.get('evidence', [])[-3:]]}
+        summary = {'files': state.get('files', [])[-12:], 'evidence': [x[:220] for x in state.get('evidence', [])[-3:]]}
         if state.get('objective') != state.get('request'):
             summary['objective'] = state['objective'][:1000]
-        return ('\nAURAX: conserva el objetivo y divide cambios. QbitX: lee, edita y comprueba. '
-                'No inventes pruebas ni compilaciones. Siguiente paso: un cambio completo.\n'
+        last_exec = state.get('last_exec')
+        if isinstance(last_exec, dict) and last_exec.get('exit_code') not in (None, 0):
+            summary['last_build_error'] = {
+                'action': last_exec.get('action'),
+                'path': last_exec.get('path'),
+                'exit_code': last_exec.get('exit_code'),
+                'output': str(last_exec.get('output', ''))[-450:],
+            }
+        return ('\nAURAX/QbitX (flujo estilo Codex/Claude Code): obedece exactamente la instrucción del usuario; '
+                'inspecciona los archivos reales, aplica cambios precisos y si compilación/pruebas fallan, '
+                'lee el error real, corrige y vuelve a verificar hasta lograr código de salida 0.\n'
                 + json.dumps(summary, ensure_ascii=False))
 
 

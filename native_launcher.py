@@ -74,6 +74,7 @@ class Window(QMainWindow):
   self.memory=Memory(self.data/'memoria.db');self.skills=SkillStore(self.data/'skills');self.skills.install_defaults(ROOT/'skills')
   if (ROOT/'skills/reverse-engineer-anything/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','reverse-engineer-anything')
   if (ROOT/'skills/blender-3d/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','blender-3d')
+  if (ROOT/'skills/impeccable/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','impeccable')
   self.registry=ApprovalRegistry()
   self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.client.acceleration=self.prefs.get('acceleration','auto');self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
@@ -82,7 +83,34 @@ class Window(QMainWindow):
   self.audio=QAudioOutput();self.player=QMediaPlayer();self.player.setAudioOutput(self.audio);self.audio.setVolume(self.prefs.get('volume',90)/100)
   self.floating=FloatingAssistant(self)
   self.new_chat();self.refresh_history();self.timer=QTimer(self);self.timer.timeout.connect(self.progress);self.timer.start(300)
-  self.startup=None;self.startup_finished=False;self.attached_files=[];self.aurax=None;self.aurax_dock=None;self.mode.currentIndexChanged.connect(lambda index:self.open_aurax() if index==1 else None);self.autonomous.toggled.connect(self.toggle_autonomous)
+  self.startup=None;self.startup_finished=False;self.attached_files=[];self.aurax=None;self.aurax_dock=None;self.terminal_panel=None;self.terminal_dock=None;self.mode.currentIndexChanged.connect(lambda index:self.open_aurax() if index==1 else None);self.autonomous.toggled.connect(self.toggle_autonomous)
+  from agente_ia.slash_palette import SlashPopup
+  self.slash_popup=SlashPopup(self);self.input.popup=self.slash_popup;self.slash_popup.entry_chosen.connect(self._apply_slash_entry);self.input.textChanged.connect(self._update_slash_popup)
+ def open_slash_palette(self):
+  if self.busy or self.warming:return
+  if not self.input.toPlainText().startswith('/'):self.input.setPlainText('/')
+  self.input.setFocus();cursor=self.input.textCursor();cursor.movePosition(cursor.MoveOperation.End);self.input.setTextCursor(cursor);self._update_slash_popup()
+ def _update_slash_popup(self):
+  from agente_ia.slash_palette import build_slash_catalog,filter_slash_entries,list_workspace_mentions
+  txt=self.input.toPlainText()
+  entries=[]
+  if txt.startswith('/') and ' ' not in txt and '\n' not in txt:
+   entries=filter_slash_entries(build_slash_catalog(getattr(self,'skills',None)),txt)
+  else:
+   match=re.search(r'(?:^|\s)@([^\s]*)$',txt)
+   if match:entries=list_workspace_mentions(self.store.get_settings().workspace_path,match.group(1))
+  if not entries:self.slash_popup.hide();return
+  self.slash_popup.set_entries(entries);pos=self.input.mapToGlobal(self.input.rect().topLeft());w=max(380,self.input.width());h=min(240,36*min(len(entries),7)+12);self.slash_popup.setGeometry(pos.x(),max(10,pos.y()-h-6),w,h);self.slash_popup.show()
+ def _apply_slash_entry(self,entry):
+  txt=self.input.toPlainText()
+  if entry.kind=='file':
+   rel=entry.payload['path'];new_txt=re.sub(r'(?:^|\s)@[^\s]*$',lambda m:(' ' if m.group(0).startswith(' ') else '')+'@'+rel+' ',txt)
+   self.input.setPlainText(new_txt)
+   if rel not in self.attached_files and len(self.attached_files)<4:self.attached_files.append(rel)
+   self.status.setText('Archivo mencionado y adjuntado: '+rel)
+  else:
+   self.input.setPlainText(entry.command+' ')
+  self.input.setFocus();cursor=self.input.textCursor();cursor.movePosition(cursor.MoveOperation.End);self.input.setTextCursor(cursor)
  def toggle_autonomous(self,enabled):
   s=self.store.get_settings()
   if bool(s.autonomous_mode)!=bool(enabled):self.store.save_settings(s.model_copy(update={'autonomous_mode':bool(enabled)}))
@@ -206,8 +234,44 @@ class Window(QMainWindow):
   if self.busy:
    first=self.client.first_text;self.status.setText((getattr(self.command_runner,'label','QbitX trabajando') if getattr(self,'command_runner',None) is not None else getattr(self,'task_stage','Generando') if first else 'Preparando modelo y contexto')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(first,2))+' s' if first else ''))
  def send(self):
+  if getattr(self,'slash_popup',None) is not None:self.slash_popup.hide()
   text=self.input.toPlainText().strip()
   if self.busy or self.warming or not text:return
+  if text.startswith('/'):
+   from agente_ia.slash_palette import resolve_slash_command
+   from agente_ia.native_terminal import launch_external_shell
+   resolved=resolve_slash_command(text,getattr(self,'skills',None))
+   if resolved is not None:
+    rtype=resolved['type']
+    if rtype=='open_terminal':
+     self.input.clear();self.terminal(shell=resolved.get('shell','powershell'),command=resolved.get('command',''));return
+    if rtype=='external_shell':
+     self.input.clear()
+     try:launch_external_shell(resolved['shell'],self.store.get_settings().workspace_path);self.status.setText('Ventana externa de '+resolved['shell'].upper()+' abierta en el proyecto.')
+     except Exception as exc:self.error(exc)
+     return
+    if rtype=='toggle_autonomous':
+     self.input.clear();arg=resolved.get('arg','').lower();target=True if arg in ('on','si','sí','1','activar') else False if arg in ('off','no','0','desactivar') else not self.autonomous.isChecked()
+     self.autonomous.setChecked(target);return
+    if rtype=='open_panel':
+     self.input.clear();{'skills':self.skills_panel,'settings':self.settings,'changes':self.changes}[resolved['panel']]();return
+    if rtype=='notice':
+     self.input.clear();self.status.setText(resolved['message']);return
+    if rtype=='invoke_skill':
+     if getattr(self,'skills',None) is not None:
+      from agente_ia.skills import max_enabled_for_context
+      try:self.skills.enable(resolved['skill_id'],True,max_enabled=max_enabled_for_context(self.store.get_settings().num_ctx))
+      except Exception:pass
+     self.open_aurax();text=resolved['prompt']
+    elif rtype=='prompt':
+     if resolved.get('force_programming') and not self.temporary.isChecked():self.open_aurax()
+     text=resolved['prompt']
+  # Adjuntar automáticamente archivos reales mencionados con @ruta
+  ws_root=Path(self.store.get_settings().workspace_path).resolve()
+  for m in re.findall(r'(?:^|\s)@([A-Za-z0-9_./-]+\.[A-Za-z0-9_]+)',text):
+   cand=(ws_root/m).resolve()
+   if cand.is_file() and cand.is_relative_to(ws_root) and m not in self.attached_files and len(self.attached_files)<4:
+    self.attached_files.append(m)
   from agente_ia.code_artifacts import file_task_requested
   from agente_ia.project_actions import requested_actions,ProjectRunner
   actions=requested_actions(text)
@@ -462,21 +526,23 @@ class Window(QMainWindow):
     d.accept()
    except Exception as e:self.error(e)
   l.addWidget(btn('Importar carpeta de habilidad',import_));l.addWidget(btn('Guardar selección',save));refresh();d.exec()
- def terminal(self):
-  if self.guarded():return
-  d,l=self.dialog('Terminal y compilación');l.addWidget(QLabel('Carpeta: '+self.store.get_settings().workspace_path));command=QLineEdit();command.setPlaceholderText('python -m PyInstaller --onefile programa.py');l.addWidget(command);output=QPlainTextEdit();output.setReadOnly(True);l.addWidget(output);bus=Bus(d);bus.event.connect(lambda kind,text:output.setPlainText(text))
-  def run():
-   cmd=command.text().strip()
-   if not cmd:return
-   if QMessageBox.question(d,'Autorizar comando','Puede modificar archivos y usar Internet.\n\n'+cmd)!=QMessageBox.StandardButton.Yes:return
-   runbutton.setEnabled(False);output.setPlainText('Ejecutando…')
-   def work():
-    try:
-     env=os.environ.copy();env['PATH']=os.pathsep.join(str(ROOT/part) for part in ['herramientas/python','herramientas/node','herramientas/php','herramientas/jdk/bin','herramientas/w64devkit/bin','herramientas/inno'])+os.pathsep+env.get('PATH','');env['JAVA_HOME']=str(ROOT/'herramientas/jdk');p=subprocess.run(cmd,shell=True,cwd=self.store.get_settings().workspace_path,env=env,capture_output=True,timeout=120,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));text=p.stdout.decode('utf-8','replace')+p.stderr.decode('utf-8','replace')+'\nCódigo de salida: '+str(p.returncode)
-    except Exception as e:text=str(e)
-    bus.event.emit('output',text)
-   threading.Thread(target=work,daemon=True).start()
-  runbutton=btn('Autorizar y ejecutar',run);l.addWidget(runbutton);d.exec()
+ def terminal(self,shell='powershell',command=''):
+  if isinstance(shell,bool) or not shell:shell='powershell'
+  from agente_ia.native_terminal import AuraTerminalPanel
+  if getattr(self,'terminal_panel',None) is None:
+   self.terminal_panel=AuraTerminalPanel(self,ROOT)
+   self.terminal_panel.send_to_chat_requested.connect(self._receive_terminal_output)
+   self.terminal_dock=QDockWidget('Terminal · AURA (PowerShell / CMD / Python)',self)
+   self.terminal_dock.setWidget(self.terminal_panel)
+   self.terminal_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea)
+   self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.terminal_dock)
+  self.terminal_panel.refresh_workspace();self.terminal_dock.show();self.terminal_dock.raise_()
+  idx=self.terminal_panel.shell_box.findData(str(shell or 'powershell').lower())
+  if idx>=0:self.terminal_panel.shell_box.setCurrentIndex(idx)
+  if command and str(command).strip():self.terminal_panel.execute(str(command).strip(),shell=shell)
+  else:self.terminal_panel.command_input.setFocus()
+ def _receive_terminal_output(self,prompt):
+  self.open_aurax();self.input.setPlainText(prompt);self.input.setFocus();self.status.setText('Salida de terminal lista para que AURA la analice y repare.')
  def changes(self):
   if self.guarded():return
   d,l=self.dialog('Cambios y deshacer');listing=QListWidget();l.addWidget(listing);preview=QPlainTextEdit();preview.setReadOnly(True);l.addWidget(preview)

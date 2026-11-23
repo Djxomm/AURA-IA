@@ -32,7 +32,7 @@ def model_label(path):
 class MenuButton(QToolButton):
     compact_text=''
     def minimumSizeHint(self):
-        hint=super().minimumSizeHint();return QSize(120,hint.height())
+        hint=super().minimumSizeHint();return QSize(94,hint.height())
     def sizeHint(self):
         hint=super().sizeHint();return QSize(min(250,hint.width()),hint.height())
     def paintEvent(self,event):
@@ -52,7 +52,7 @@ class ChatControls(QWidget):
         super().__init__(parent)
         self.setObjectName('chatControls')
         row=QHBoxLayout(self);row.setContentsMargins(0,3,0,3);row.setSpacing(8)
-        self.model_button=MenuButton(self);self.model_button.setObjectName('chatModelButton');self.model_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);self.model_button.setMinimumWidth(120);self.model_button.setMaximumWidth(330)
+        self.model_button=MenuButton(self);self.model_button.setObjectName('chatModelButton');self.model_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);self.model_button.setMinimumWidth(94);self.model_button.setMaximumWidth(330)
         self.model_menu=QMenu(self);self.model_button.setMenu(self.model_menu)
         self.effort_button=MenuButton(self);self.effort_button.setObjectName('chatEffortButton');self.effort_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.effort_menu=QMenu(self);self.effort_button.setMenu(self.effort_menu)

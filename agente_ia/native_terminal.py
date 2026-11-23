@@ -201,6 +201,10 @@ class AuraTerminalPanel(QWidget):
                     if (cand / "blender.exe").is_file():
                         prefixes.append(str(cand))
                         break
+        from .diagram_studio import find_kicad_cli
+        kicad_info = find_kicad_cli(self.runtime)
+        if kicad_info.get("bin_dir") and kicad_info["bin_dir"] not in prefixes:
+            prefixes.append(str(kicad_info["bin_dir"]))
         if prefixes:
             env.insert("PATH", os.pathsep.join(prefixes) + os.pathsep + env.value("PATH"))
         return env

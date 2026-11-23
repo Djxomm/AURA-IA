@@ -34,6 +34,8 @@ BUILTIN_ACTIONS: tuple[tuple[str, str, str, str], ...] = (
     ("/web", "Buscar en Internet", "Investiga documentación y soluciones técnicas con web_search", "Investigación"),
     ("/pc", "Control e inspección de la PC", "Inspecciona procesos/ventanas/pantalla o maneja apps con aprobación de 1 clic", "PC"),
     ("/android", "Android · UI, Depuración, ADB y Fastboot", "Crea o depura apps Android y administra teléfonos por ADB (USB/Wi-Fi) y Fastboot", "Android"),
+    ("/kicad", "KiCad 10 · Esquemáticos y PCBs", "Crea diagramas electrónicos (.kicad_sch/.kicad_pro/.svg), ERC/DRC, Gerbers y STEP", "Diagramas"),
+    ("/diagrama", "Diagramas de bloques, flujo y circuitos", "Genera diagramas vectoriales SVG, Mermaid y esquemáticos KiCad 10 offline", "Diagramas"),
     ("/plan", "Planificar arquitectura", "Diseña un plan paso a paso antes de tocar archivos", "Agente"),
     ("/skills", "Administrar habilidades", "Abre el panel de habilidades (importar / activar / quitar)", "Paneles"),
     ("/modelos", "Modelos y habilidades", "Abre la configuración de modelos locales probados", "Paneles"),
@@ -47,6 +49,7 @@ _SKILL_ALIASES: dict[str, tuple[str, ...]] = {
     "bases-sql": ("/sql",),
     "control-pc": ("/pc",),
     "android-adb-dev": ("/android", "/adb"),
+    "kicad-diagramas": ("/kicad", "/diagrama"),
 }
 
 
@@ -273,6 +276,19 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
             "prompt": (
                 f"Usa `pc_inspect(action='android_devices')`, `run_command` (con `adb`/`fastboot`/`gradlew`, respetando aprobación de 1 clic en cambios al dispositivo) "
                 f"y buenas prácticas Android/Kotlin/Jetpack Compose para cumplir esta orden directa: {task}"
+            ),
+            "force_programming": True,
+            "auto_autonomous": True,
+        }
+
+    if cmd in ("/kicad", "/diagrama"):
+        task = rest or "Crea un diagrama de bloques o esquemático KiCad 10 con vista previa SVG en el proyecto."
+        return {
+            "type": "prompt",
+            "prompt": (
+                f"Usa `agente_ia.diagram_studio` (`create_kicad_diagram_bundle` para circuitos `.kicad_sch`/`.kicad_pro`/`.svg` "
+                f"o `render_architecture_svg` para bloques/arquitectura `.svg`/`.mmd`) y `kicad-cli` si está instalado "
+                f"para cumplir esta orden directa: {task}"
             ),
             "force_programming": True,
             "auto_autonomous": True,

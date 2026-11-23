@@ -111,6 +111,10 @@ def _build_env(runtime: Path | None) -> dict[str, str]:
                 if (cand / "blender.exe").is_file():
                     prefixes.append(str(cand))
                     break
+    from .diagram_studio import find_kicad_cli
+    kicad_info = find_kicad_cli(runtime)
+    if kicad_info.get("bin_dir") and kicad_info["bin_dir"] not in prefixes:
+        prefixes.append(str(kicad_info["bin_dir"]))
     if prefixes:
         env["PATH"] = os.pathsep.join(prefixes) + os.pathsep + env.get("PATH", "")
     return env

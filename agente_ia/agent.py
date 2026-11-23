@@ -623,8 +623,8 @@ class AgentEngine:
                     "steps": step,
                 }
 
-            # Si el modelo emitió bloques XML sin texto útil, limpiamos el buffer temporal en UI
-            if response.used_tool_mode == "xml" and "<tool_call>" in response.raw_content:
+            # Si el modelo emitió bloques XML/fenced sin texto útil, limpiamos el buffer temporal en UI
+            if response.used_tool_mode == "xml" and ("<tool_call>" in response.raw_content or "```tool_call" in response.raw_content):
                 await _emit(emit, "stream_clean", {"content": response.content, "step": step})
 
             assistant_tool_calls_payload = [

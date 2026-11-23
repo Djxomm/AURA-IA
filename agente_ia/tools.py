@@ -302,11 +302,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "pc_inspect",
-            "description": "Inspecciona PC (system_info, list_processes, list_windows, screenshot, clipboard_get).",
+            "description": "Inspecciona PC o Android (system_info, list_processes, list_windows, screenshot, clipboard_get, android_devices).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["system_info", "list_processes", "list_windows", "screenshot", "clipboard_get"]},
+                    "action": {"type": "string", "enum": ["system_info", "list_processes", "list_windows", "screenshot", "clipboard_get", "android_devices"]},
                     "query": {"type": "string"},
                     "output_path": {"type": "string"},
                     "limit": {"type": "integer"},
@@ -358,7 +358,7 @@ COMPACT_TOOL_SUMMARY = (
     "- edit_image(input_path, output_path, prompt?, strength?, operations?)\n"
     "- web_search(query, max_results?)\n"
     "- fetch_url(url, max_chars?)\n"
-    "- pc_inspect(action: system_info|list_processes|list_windows|screenshot|clipboard_get, query?, output_path?)\n"
+    "- pc_inspect(action: system_info|list_processes|list_windows|screenshot|clipboard_get|android_devices, query?, output_path?)\n"
     "- pc_control(action: open_app|open_path|focus_window|mouse_click|type_text|press_hotkey|close_process|clipboard_set, target?, x?, y?, text?, keys?, reason?)"
 )
 

@@ -44,6 +44,11 @@ def validate_command(command: str) -> str:
             raise WorkspaceError(
                 "Comando bloqueado por seguridad: afecta al sistema operativo o discos fuera del proyecto."
             )
+    from .android_tools import android_command_policy
+    if android_command_policy(text) == "blocked":
+        raise WorkspaceError(
+            "Comando Fastboot bloqueado por seguridad: modifica o borra particiones críticas de arranque/radio del dispositivo."
+        )
     return text
 
 
@@ -58,9 +63,12 @@ _APPROVAL_REQUIRED_PATTERNS = (
 
 
 def command_requires_approval(command: str) -> bool:
-    """Devuelve True si el comando instala software, borra archivos, cierra procesos o altera remotos."""
+    """Devuelve True si el comando instala software, borra archivos, cierra procesos, altera remotos o modifica un dispositivo Android."""
     text = str(command or "").strip()
-    return any(p.search(text) for p in _APPROVAL_REQUIRED_PATTERNS)
+    if any(p.search(text) for p in _APPROVAL_REQUIRED_PATTERNS):
+        return True
+    from .android_tools import android_command_policy
+    return android_command_policy(text) == "requires_approval"
 
 
 def _build_env(runtime: Path | None) -> dict[str, str]:
@@ -77,6 +85,7 @@ def _build_env(runtime: Path | None) -> dict[str, str]:
             "herramientas/node",
             "herramientas/w64devkit/bin",
             "herramientas/inno",
+            "herramientas/platform-tools",
         ):
             cand = rt / rel
             if cand.is_dir():
@@ -85,6 +94,17 @@ def _build_env(runtime: Path | None) -> dict[str, str]:
         py_dir = Path(sys.executable).resolve().parent
         if py_dir.is_dir():
             prefixes.append(str(py_dir))
+    pkg_pt = Path(__file__).resolve().parent.parent / "runtime" / "herramientas" / "platform-tools"
+    if pkg_pt.is_dir() and str(pkg_pt) not in prefixes:
+        prefixes.append(str(pkg_pt))
+    from .android_tools import find_android_sdk
+    android_sdk = find_android_sdk()
+    if android_sdk is not None:
+        env.setdefault("ANDROID_HOME", str(android_sdk))
+        env.setdefault("ANDROID_SDK_ROOT", str(android_sdk))
+        sdk_pt = android_sdk / "platform-tools"
+        if sdk_pt.is_dir() and str(sdk_pt) not in prefixes:
+            prefixes.append(str(sdk_pt))
     for blender_root in (Path(r"C:\Program Files\Blender Foundation"), Path(r"C:\Program Files (x86)\Blender Foundation")):
         if blender_root.is_dir():
             for cand in sorted(blender_root.glob("Blender*"), reverse=True):

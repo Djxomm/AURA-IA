@@ -180,10 +180,21 @@ class AuraTerminalPanel(QWidget):
             "herramientas/jdk/bin",
             "herramientas/w64devkit/bin",
             "herramientas/inno",
+            "herramientas/platform-tools",
         ):
             cand = self.runtime / rel
             if cand.is_dir():
                 prefixes.append(str(cand))
+        from .android_tools import find_android_sdk
+        android_sdk = find_android_sdk()
+        if android_sdk is not None:
+            if not env.contains("ANDROID_HOME"):
+                env.insert("ANDROID_HOME", str(android_sdk))
+            if not env.contains("ANDROID_SDK_ROOT"):
+                env.insert("ANDROID_SDK_ROOT", str(android_sdk))
+            sdk_pt = android_sdk / "platform-tools"
+            if sdk_pt.is_dir():
+                prefixes.append(str(sdk_pt))
         for blender_root in (Path(r"C:\Program Files\Blender Foundation"), Path(r"C:\Program Files (x86)\Blender Foundation")):
             if blender_root.is_dir():
                 for cand in sorted(blender_root.glob("Blender*"), reverse=True):

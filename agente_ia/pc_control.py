@@ -17,7 +17,7 @@ import psutil
 from .workspace import SafeWorkspace, WorkspaceError
 
 
-PC_INSPECT_ACTIONS = ("system_info", "list_processes", "list_windows", "screenshot", "clipboard_get")
+PC_INSPECT_ACTIONS = ("system_info", "list_processes", "list_windows", "screenshot", "clipboard_get", "android_devices")
 PC_CONTROL_ACTIONS = (
     "open_app",
     "open_path",
@@ -196,6 +196,10 @@ def pc_inspect(
             "height": img.height,
             "bytes": target.stat().st_size,
         }
+
+    if act == "android_devices":
+        from .android_tools import inspect_android_devices
+        return inspect_android_devices()
 
     # clipboard_get
     if os.name == "nt":

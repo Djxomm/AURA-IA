@@ -35,11 +35,11 @@ AGENT_CATALOG: tuple[ExternalAgentSpec, ...] = (
     ),
     ExternalAgentSpec(
         id="codex",
-        name="Codex CLI",
-        subtitle="Agente CLI estilo Codex para compilar, depurar y aplicar parches",
-        executables=("codex", "codex.cmd", "codex.exe", "codex.ps1"),
+        name="Codex CLI (OpenAI)",
+        subtitle="Agente CLI oficial de Codex para compilar, depurar y aplicar parches en tu workspace",
+        executables=("codex", "codex.exe", "codex.cmd", "codex.ps1"),
         ollama_launch_name="codex",
-        install_hint="npm i -g @openai/codex  (o vía Ollama Apps)",
+        install_hint='powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
     ),
     ExternalAgentSpec(
         id="opencode",
@@ -107,6 +107,7 @@ def _extra_search_dirs() -> list[Path]:
     dirs: list[Path] = []
     home = Path.home()
     candidates = [
+        home / "AppData" / "Local" / "Programs" / "OpenAI" / "Codex" / "bin",
         home / "AppData" / "Roaming" / "npm",
         home / "AppData" / "Local" / "Programs" / "Ollama",
         home / "AppData" / "Local" / "GitHubCopilotCLI",
@@ -117,6 +118,28 @@ def _extra_search_dirs() -> list[Path]:
         if c.is_dir():
             dirs.append(c)
     return dirs
+
+
+def update_codex_cli(timeout: int = 240) -> dict[str, Any]:
+    """Instala o actualiza Codex CLI usando el instalador oficial de OpenAI para Windows."""
+    ps_exe = find_executable(("powershell", "powershell.exe", "pwsh")) or "powershell.exe"
+    env = os.environ.copy()
+    env["CODEX_NON_INTERACTIVE"] = "1"
+    proc = subprocess.run(
+        [ps_exe, "-ExecutionPolicy", "Bypass", "-Command", "irm https://chatgpt.com/codex/install.ps1 | iex"],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=timeout,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    exe = find_executable(("codex.exe", "codex"))
+    return {
+        "ok": proc.returncode == 0 and bool(exe),
+        "exit_code": proc.returncode,
+        "executable": exe or "",
+        "output": (proc.stdout + "\n" + proc.stderr).strip()[-1200:],
+    }
 
 
 def find_executable(names: tuple[str, ...]) -> str | None:
@@ -347,8 +370,38 @@ def open_external_agents_dialog(parent, workspace_path: str | Path, initial_prom
     scroll.setWidget(grid_host)
     root_layout.addWidget(scroll, 1)
 
+    footer = QHBoxLayout()
+    upd_codex_btn = QPushButton("Instalar / Actualizar Codex CLI")
+    upd_codex_btn.setStyleSheet("background:#0f766e;color:#ffffff;")
+
+    def _run_update_codex():
+        res_q = QMessageBox.question(
+            dlg,
+            "Actualizar Codex CLI",
+            "Se ejecutará el instalador oficial de OpenAI Codex:\n"
+            'irm https://chatgpt.com/codex/install.ps1 | iex\n\n¿Continuar?',
+        )
+        if res_q != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            res = update_codex_cli()
+            QMessageBox.information(
+                dlg,
+                "Codex CLI",
+                ("Codex CLI actualizado correctamente:\n" + res["executable"]) if res["ok"] else ("No se pudo actualizar:\n" + res["output"]),
+            )
+            if res["ok"]:
+                dlg.accept()
+                open_external_agents_dialog(parent, workspace_path, initial_prompt=prompt_box.text().strip())
+        except Exception as exc:
+            QMessageBox.warning(dlg, "Codex CLI", str(exc))
+
+    upd_codex_btn.clicked.connect(_run_update_codex)
     close_btn = QPushButton("Cerrar")
     close_btn.setStyleSheet("background:#334155;color:#f8fafc;")
     close_btn.clicked.connect(dlg.reject)
-    root_layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
+    footer.addWidget(upd_codex_btn)
+    footer.addStretch(1)
+    footer.addWidget(close_btn)
+    root_layout.addLayout(footer)
     dlg.exec()

@@ -41,6 +41,22 @@ def test_external_agents_catalog_and_launch_commands(tmp_path):
     argv_cmd, disp_cmd = build_launch_command("cmd", tmp_path)
     assert argv_cmd[0].lower().endswith("cmd.exe") and "/k" in argv_cmd
 
+    codex_entry = next(a for a in agents if a["id"] == "codex")
+    assert codex_entry["name"].startswith("Codex CLI")
+    if codex_entry["installed"]:
+        argv_cx, disp_cx = build_launch_command("codex", tmp_path, prompt="compila")
+        assert str(tmp_path.resolve()) in disp_cx and "compila" in disp_cx
+
+
+def test_workspace_compile_action_works_for_any_model_in_active_workspace(tmp_path):
+    from agente_ia.command_exec import execute_project_action
+    from agente_ia.workspace import SafeWorkspace
+
+    (tmp_path / "app.py").write_text("def suma(a, b):\n    return a + b\n", encoding="utf-8")
+    ws = SafeWorkspace(str(tmp_path))
+    res = execute_project_action(ws, None, "check", "app.py")
+    assert res["ok"] is True and res["exit_code"] == 0
+
 
 def test_qbitx_multi_toolchain_plans(tmp_path):
     from agente_ia.project_actions import choose_target, plan

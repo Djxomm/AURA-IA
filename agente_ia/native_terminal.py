@@ -205,6 +205,9 @@ class AuraTerminalPanel(QWidget):
         kicad_info = find_kicad_cli(self.runtime)
         if kicad_info.get("bin_dir") and kicad_info["bin_dir"] not in prefixes:
             prefixes.append(str(kicad_info["bin_dir"]))
+        codex_bin = Path.home() / "AppData" / "Local" / "Programs" / "OpenAI" / "Codex" / "bin"
+        if codex_bin.is_dir() and str(codex_bin) not in prefixes:
+            prefixes.append(str(codex_bin))
         if prefixes:
             env.insert("PATH", os.pathsep.join(prefixes) + os.pathsep + env.value("PATH"))
         return env

@@ -33,6 +33,7 @@ class AuraxWorkspace(QWidget):
    row.addAction(text,lambda checked=False,kind=kind:self.run(kind))
   self.repair_action=row.addAction('Reparar error en chat',self.send_error_to_chat)
   self.repair_action.setEnabled(False)
+  row.addAction('Codex',self.launch_codex_here)
   row.addAction('Apps CLI',self.open_external_apps)
   row.addAction('💬 Globo',self.toggle_bubble_bar)
   row.addAction('Detener',self.stop_process);layout.addWidget(row)
@@ -51,6 +52,13 @@ class AuraxWorkspace(QWidget):
   if vis:self.bubble_input.setFocus()
  def open_external_apps(self):
   if hasattr(self.owner,'open_external_agents'):self.owner.open_external_agents(self.bubble_input.text().strip())
+ def launch_codex_here(self):
+  try:
+   from .external_agents import launch_external_agent
+   res=launch_external_agent('codex',self.workspace.root,prompt=self.bubble_input.text().strip())
+   self.console.appendPlainText(f"Codex CLI abierto en el workspace: {self.workspace.root} (PID {res['pid']})")
+  except Exception as exc:
+   self.message(exc)
  def send_bubble_instruction(self):
   text=self.bubble_input.text().strip()
   if not text:self.bubble_input.setFocus();return

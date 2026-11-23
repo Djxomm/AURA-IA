@@ -115,6 +115,9 @@ def _build_env(runtime: Path | None) -> dict[str, str]:
     kicad_info = find_kicad_cli(runtime)
     if kicad_info.get("bin_dir") and kicad_info["bin_dir"] not in prefixes:
         prefixes.append(str(kicad_info["bin_dir"]))
+    codex_bin = Path.home() / "AppData" / "Local" / "Programs" / "OpenAI" / "Codex" / "bin"
+    if codex_bin.is_dir() and str(codex_bin) not in prefixes:
+        prefixes.append(str(codex_bin))
     if prefixes:
         env["PATH"] = os.pathsep.join(prefixes) + os.pathsep + env.get("PATH", "")
     return env
@@ -355,6 +358,54 @@ def execute_project_action(
 
     # Respaldo directo en entorno de desarrollo / pruebas sin carpeta runtime/herramientas
     env = _build_env(rt_path)
+    # Soporte multi-toolchain del workspace activo (Android Gradle, Rust, Go, .NET, Node/npm, PyInstaller .spec)
+    if target_path is None or target_path.suffix.lower() in {".spec", ".kt", ".gradle", ".rs", ".go", ".cs", ".csproj", ".sln"}:
+        if target_path is not None and target_path.suffix.lower() == ".spec":
+            if act != "build":
+                raise WorkspaceError("Un archivo `.spec` de PyInstaller se compila con `action='build'`.")
+            py = _find_python(rt_path)
+            cmd_args = [str(py), "-m", "PyInstaller", "--noconfirm", str(target_path)]
+            if on_output:
+                on_output("> " + subprocess.list2cmdline(cmd_args))
+            res = _run_subprocess_sync(cmd_args, cwd=workspace.root, env=env, timeout=600, cancel_check=cancel_check, on_output=on_output)
+            return {**res, "action": act, "target": rel_target or target_path.name, "artifact": None, "commands": [{"action": act, "exit_code": res["exit_code"], "seconds": res["seconds"]}]}
+        gradlew = workspace.root / "gradlew.bat"
+        if gradlew.is_file():
+            task = {"build": ":app:assembleDebug", "test": "testDebugUnitTest", "check": ":app:compileDebugKotlin", "run": ":app:installDebug"}.get(act, ":app:assembleDebug")
+            cmd_args = [str(gradlew), task]
+            if on_output:
+                on_output("> " + subprocess.list2cmdline(cmd_args))
+            res = _run_subprocess_sync(cmd_args, cwd=workspace.root, env=env, timeout=600, cancel_check=cancel_check, on_output=on_output)
+            return {**res, "action": act, "target": rel_target or "android", "artifact": None, "commands": [{"action": act, "exit_code": res["exit_code"], "seconds": res["seconds"]}]}
+        if (workspace.root / "Cargo.toml").is_file() and shutil.which("cargo"):
+            sub = {"build": "build", "test": "test", "check": "check", "run": "run"}[act]
+            cmd_args = [str(shutil.which("cargo")), sub]
+            if on_output:
+                on_output("> " + subprocess.list2cmdline(cmd_args))
+            res = _run_subprocess_sync(cmd_args, cwd=workspace.root, env=env, timeout=300, cancel_check=cancel_check, on_output=on_output)
+            return {**res, "action": act, "target": rel_target or "Cargo.toml", "artifact": None, "commands": [{"action": act, "exit_code": res["exit_code"], "seconds": res["seconds"]}]}
+        if (workspace.root / "go.mod").is_file() and shutil.which("go"):
+            sub = {"build": ["build", "./..."], "test": ["test", "./..."], "check": ["vet", "./..."], "run": ["run", "."]}[act]
+            cmd_args = [str(shutil.which("go")), *sub]
+            if on_output:
+                on_output("> " + subprocess.list2cmdline(cmd_args))
+            res = _run_subprocess_sync(cmd_args, cwd=workspace.root, env=env, timeout=300, cancel_check=cancel_check, on_output=on_output)
+            return {**res, "action": act, "target": rel_target or "go.mod", "artifact": None, "commands": [{"action": act, "exit_code": res["exit_code"], "seconds": res["seconds"]}]}
+        if (list(workspace.root.glob("*.csproj")) or list(workspace.root.glob("*.sln"))) and shutil.which("dotnet"):
+            sub = {"build": ["build"], "test": ["test"], "check": ["build", "--no-incremental"], "run": ["run"]}[act]
+            cmd_args = [str(shutil.which("dotnet")), *sub]
+            if on_output:
+                on_output("> " + subprocess.list2cmdline(cmd_args))
+            res = _run_subprocess_sync(cmd_args, cwd=workspace.root, env=env, timeout=300, cancel_check=cancel_check, on_output=on_output)
+            return {**res, "action": act, "target": rel_target or "dotnet", "artifact": None, "commands": [{"action": act, "exit_code": res["exit_code"], "seconds": res["seconds"]}]}
+        if target_path is None and (workspace.root / "package.json").is_file() and shutil.which("npm"):
+            npm_script = {"build": "build", "test": "test", "check": "build", "run": "dev"}[act]
+            cmd_args = [str(shutil.which("npm")), "run", npm_script]
+            if on_output:
+                on_output("> " + subprocess.list2cmdline(cmd_args))
+            res = _run_subprocess_sync(cmd_args, cwd=workspace.root, env=env, timeout=300, cancel_check=cancel_check, on_output=on_output)
+            return {**res, "action": act, "target": "package.json", "artifact": None, "commands": [{"action": act, "exit_code": res["exit_code"], "seconds": res["seconds"]}]}
+
     if target_path is None:
         for candidate in ("main.py", "app.py", "index.js"):
             p = workspace.root / candidate

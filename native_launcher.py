@@ -439,7 +439,7 @@ class Window(QMainWindow):
    with p.open('rb') as f:
     if f.read(4)!=b'GGUF':raise ValueError('GGUF inválido.')
    from agente_ia.model_library import model_info
-   if model_info(p).get('general.architecture') not in {'qwen2','gpt-oss'}:raise ValueError('Modelo no compatible: usa Qwen2 Instruct o GPT-oss GGUF.')
+   if model_info(p).get('general.architecture') not in {'qwen2','gpt-oss','llama'}:raise ValueError('Modelo no compatible: usa Qwen2, Llama o GPT-oss GGUF.')
    registered=self.prefs.get('models',[]);registered=registered if isinstance(registered,list) else [];self.save_pref('models',list(dict.fromkeys([str(p),*[v for v in registered if isinstance(v,str)]])))
    from agente_ia.chat_controls import model_label
    self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();self.status.setText('Modelo seleccionado: '+model_label(p))
@@ -457,7 +457,7 @@ class Window(QMainWindow):
     with p.open('rb') as f:
      if f.read(4)!=b'GGUF':raise ValueError('GGUF inválido.')
     from agente_ia.model_library import model_info
-    if model_info(p).get('general.architecture') not in {'qwen2','gpt-oss'}:raise ValueError('Modelo no compatible.')
+    if model_info(p).get('general.architecture') not in {'qwen2','gpt-oss','llama'}:raise ValueError('Modelo no compatible.')
     self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();d.accept()
    except Exception as e:self.error(e)
   l.addWidget(btn('Aplicar modelo',apply));d.exec()

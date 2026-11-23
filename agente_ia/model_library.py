@@ -95,16 +95,20 @@ def model_skill_profile(path):
         try:gname=str(model_info(p).get('general.name') or '').strip().lower()
         except (OSError,ValueError):gname=''
     combined=f'{low} {gname}'
-    if 'aura-angel-5.6' in low or 'angel 5.6' in combined:
-        return {'proven':True,'tier':0,'rank':0,'canonical':'aura-angel-5.6','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Constructor autónomo · razonamiento · Full-Stack'}
+    if 'aura-mateo-pro' in low or 'mateo pro' in combined:
+        return {'proven':True,'tier':0,'rank':0,'canonical':'aura-mateo-pro','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Sucesor élite · multilenguaje · diseño gráfico · Android · KiCad · PC'}
+    if ('aura-angel-5.6' in low or 'angel 5.6' in combined) and '-r1-' not in low:
+        return {'proven':True,'tier':0,'rank':1,'canonical':'aura-angel-5.6','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Constructor autónomo · razonamiento · Full-Stack · Android · KiCad'}
     if 'aura-lumen-2.0ib_v2' in low or 'lumen 2.0ib_v2' in combined:
-        return {'proven':True,'tier':0,'rank':1,'canonical':'aura-lumen-2.0ib_v2','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Código · UI/WCAG · FastAPI · herramientas AURA'}
+        return {'proven':True,'tier':0,'rank':2,'canonical':'aura-lumen-2.0ib_v2','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Código · UI/WCAG · FastAPI · herramientas AURA'}
     if 'aura-lumen-2.0ib_v1' in low or 'lumen 2.0ib_v1' in combined:
         return {'proven':True,'tier':1,'rank':0,'canonical':'aura-lumen-2.0ib_v1','category':'⚙ Edición de Código y Herramientas AURA','skills':'Edición Python · herramientas AURA'}
     if 'qwen2.5-coder-3b-instruct' in low:
         return {'proven':True,'tier':1,'rank':1,'canonical':'qwen2.5-coder-3b','category':'⚙ Edición de Código y Herramientas AURA','skills':'Programación general · refactorización equilibrada'}
     if 'qwen2.5-coder-1.5b-instruct' in low:
         return {'proven':True,'tier':2,'rank':0,'canonical':'qwen2.5-coder-1.5b','category':'⚡ Respuesta Rápida y Consultas','skills':'Consultas rápidas · edición ligera'}
+    if 'aura-mateo-nano' in low or 'mateo-nano' in combined:
+        return {'proven':True,'tier':2,'rank':1,'canonical':'aura-mateo-nano','category':'⚡ Respuesta Rápida y Consultas','skills':'Prototipo experimental 100 % desde cero (Llama)'}
     # Modelos pesados/lentos en CPU o variantes no probadas quedan marcados como proven=False
     if any(tok in combined for tok in ('gpt-oss','72b','32b','20b','14b','7b')):
         return {'proven':False,'tier':3,'rank':9,'canonical':low,'category':'Modelos pesados · lentos en CPU','skills':'Alto consumo de RAM y respuesta lenta'}
@@ -117,7 +121,7 @@ def curate_proven_models(paths,*,current=None,extra_runs_dirs=()):
     for run_root in extra_runs_dirs:
         root=Path(run_root)
         if not root.is_dir():continue
-        for pat in ('AURA-ANGEL-5.6*.gguf','AURA-Lumen-2.0IB_V2*.gguf','AURA-Lumen-2.0IB_V1*.gguf'):
+        for pat in ('AURA-MATEO-Pro*.gguf','AURA-ANGEL-5.6*.gguf','AURA-Lumen-2.0IB_V2*.gguf','AURA-Lumen-2.0IB_V1*.gguf'):
             candidates.extend(sorted(root.rglob(pat),key=lambda x:x.stat().st_mtime,reverse=True))
     candidates.extend(Path(p) for p in paths)
     cur_resolved=None

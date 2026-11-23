@@ -78,6 +78,7 @@ class Window(QMainWindow):
   if (ROOT/'skills/control-pc/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','control-pc')
   if (ROOT/'skills/android-adb-dev/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','android-adb-dev')
   if (ROOT/'skills/kicad-diagramas/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','kicad-diagramas')
+  if (ROOT/'skills/video-diseno-studio/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','video-diseno-studio')
   self.registry=ApprovalRegistry()
   self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.client.acceleration=self.prefs.get('acceleration','auto');self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)

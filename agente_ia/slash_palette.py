@@ -31,6 +31,8 @@ BUILTIN_ACTIONS: tuple[tuple[str, str, str, str], ...] = (
     ("/probar", "Ejecutar pruebas", "Corre pytest, npm test o pruebas del archivo actual", "Construcción"),
     ("/verificar", "Verificar sintaxis", "Comprueba sintaxis sin ejecutar (py_compile / node --check / gcc)", "Construcción"),
     ("/imagen", "Estudio de imágenes offline", "Genera o edita una imagen fotorrealista 100 % local", "Creativo"),
+    ("/diseno", "Diseño gráfico profesional", "Crea carteles, banners, miniaturas e identidad visual con tipografía nítida", "Creativo"),
+    ("/video", "Video realista / Avatar / 3D MP4", "Crea videos 2.5D, avatar parlante local o scripts de video 3D realista para Blender 5", "Creativo"),
     ("/web", "Buscar en Internet", "Investiga documentación y soluciones técnicas con web_search", "Investigación"),
     ("/pc", "Control e inspección de la PC", "Inspecciona procesos/ventanas/pantalla o maneja apps con aprobación de 1 clic", "PC"),
     ("/android", "Android · UI, Depuración, ADB y Fastboot", "Crea o depura apps Android y administra teléfonos por ADB (USB/Wi-Fi) y Fastboot", "Android"),
@@ -50,6 +52,7 @@ _SKILL_ALIASES: dict[str, tuple[str, ...]] = {
     "control-pc": ("/pc",),
     "android-adb-dev": ("/android", "/adb"),
     "kicad-diagramas": ("/kicad", "/diagrama"),
+    "video-diseno-studio": ("/video", "/diseno"),
 }
 
 
@@ -289,6 +292,18 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
                 f"Usa `agente_ia.diagram_studio` (`create_kicad_diagram_bundle` para circuitos `.kicad_sch`/`.kicad_pro`/`.svg` "
                 f"o `render_architecture_svg` para bloques/arquitectura `.svg`/`.mmd`) y `kicad-cli` si está instalado "
                 f"para cumplir esta orden directa: {task}"
+            ),
+            "force_programming": True,
+            "auto_autonomous": True,
+        }
+
+    if cmd in ("/video", "/diseno"):
+        task = rest or "Crea un diseño gráfico profesional o video animado realista 100 % local en el proyecto."
+        return {
+            "type": "prompt",
+            "prompt": (
+                f"Usa `generate_image`/`edit_image` y `agente_ia.video_studio` (`compose_graphic_design`, `render_cinematic_video`, "
+                f"`render_talking_avatar_video`, `generate_blender_3d_video_script`) para cumplir esta orden directa: {task}"
             ),
             "force_programming": True,
             "auto_autonomous": True,

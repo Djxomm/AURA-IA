@@ -18,9 +18,10 @@ READ_TOOLS: set[str] = {
     "get_file_info",
     "web_search",
     "fetch_url",
+    "pc_inspect",
 }
 WRITE_TOOLS: set[str] = {"create_file", "edit_file", "write_file", "delete_file"}
-EXEC_TOOLS: set[str] = {"run_project_action", "run_command", "generate_image", "edit_image"}
+EXEC_TOOLS: set[str] = {"run_project_action", "run_command", "generate_image", "edit_image", "pc_control"}
 ALL_TOOLS: set[str] = READ_TOOLS | WRITE_TOOLS | EXEC_TOOLS
 
 
@@ -297,6 +298,45 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "pc_inspect",
+            "description": "Inspecciona PC (system_info, list_processes, list_windows, screenshot, clipboard_get).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["system_info", "list_processes", "list_windows", "screenshot", "clipboard_get"]},
+                    "query": {"type": "string"},
+                    "output_path": {"type": "string"},
+                    "limit": {"type": "integer"},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "pc_control",
+            "description": "Maneja la PC con aprobación de 1 clic (open_app, open_path, focus_window, mouse_click, type_text, press_hotkey, close_process, clipboard_set).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["open_app", "open_path", "focus_window", "mouse_click", "type_text", "press_hotkey", "close_process", "clipboard_set"]},
+                    "target": {"type": "string"},
+                    "arguments": {"type": "array", "items": {"type": "string"}},
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"},
+                    "button": {"type": "string"},
+                    "text": {"type": "string"},
+                    "keys": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["action"],
+            },
+        },
+    },
 ]
 
 
@@ -317,7 +357,9 @@ COMPACT_TOOL_SUMMARY = (
     "- generate_image(prompt, output_path, width?, height?, steps?, negative_prompt?)\n"
     "- edit_image(input_path, output_path, prompt?, strength?, operations?)\n"
     "- web_search(query, max_results?)\n"
-    "- fetch_url(url, max_chars?)"
+    "- fetch_url(url, max_chars?)\n"
+    "- pc_inspect(action: system_info|list_processes|list_windows|screenshot|clipboard_get, query?, output_path?)\n"
+    "- pc_control(action: open_app|open_path|focus_window|mouse_click|type_text|press_hotkey|close_process|clipboard_set, target?, x?, y?, text?, keys?, reason?)"
 )
 
 
@@ -331,14 +373,14 @@ def build_system_prompt(
     """Construye el prompt del sistema adaptado a modelos locales pequeños o estándar."""
     if autonomous:
         base = (
-            "Eres AURA Inteligencia Artificial en modo constructor y reparador autónomo en español.\n"
+            "Eres AURA Inteligencia Artificial, agente constructora y reparadora autónoma con control seguro de PC en español.\n"
             f"Workspace actual: {workspace_path}\n"
-            "Actúas como ingeniera constructora y reparadora directa, NO como consultora pasiva.\n"
+            "Actúas directamente con una sola orden completa, NO como consultora pasiva.\n"
             "Reglas estrictas:\n"
-            "1. Inspecciona primero el proyecto real (list_files, search_in_files, read_file); nunca inventes rutas ni código.\n"
-            "2. Aplica los cambios directamente con edit_file o create_file sin pedirle al usuario que copie código ni ejecute pasos manuales.\n"
-            "3. Verifica, prueba y compila tú misma con run_project_action(action='check'|'test'|'build'|'run') o run_command(command).\n"
-            "4. Si una prueba o compilación falla (código != 0), lee el error real, corrige el código y vuelve a probar hasta lograr código 0.\n"
+            "1. Inspecciona primero el proyecto o equipo real (list_files, search_in_files, read_file, pc_inspect); nunca inventes rutas ni código.\n"
+            "2. Elabora toda la orden en automático usando herramientas reales (edit_file, create_file, run_project_action, run_command, generate_image, edit_image, web_search, fetch_url, pc_control).\n"
+            "3. AURA pedirá aprobación de 1 clic al usuario únicamente cuando se requiera una acción sensible (borrar archivos, instalar software o controlar apps/ventanas/ratón/teclado con pc_control).\n"
+            "4. Si una prueba o compilación falla (código != 0), lee el error real, busca en Internet si hace falta, corrige el código y vuelve a probar hasta lograr código 0.\n"
             "5. Reporta solo resultados reales ejecutados; nunca inventes salidas ni afirmes éxito sin verificación."
         )
     elif compact:

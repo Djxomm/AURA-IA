@@ -32,6 +32,7 @@ BUILTIN_ACTIONS: tuple[tuple[str, str, str, str], ...] = (
     ("/verificar", "Verificar sintaxis", "Comprueba sintaxis sin ejecutar (py_compile / node --check / gcc)", "Construcción"),
     ("/imagen", "Estudio de imágenes offline", "Genera o edita una imagen fotorrealista 100 % local", "Creativo"),
     ("/web", "Buscar en Internet", "Investiga documentación y soluciones técnicas con web_search", "Investigación"),
+    ("/pc", "Control e inspección de la PC", "Inspecciona procesos/ventanas/pantalla o maneja apps con aprobación de 1 clic", "PC"),
     ("/plan", "Planificar arquitectura", "Diseña un plan paso a paso antes de tocar archivos", "Agente"),
     ("/skills", "Administrar habilidades", "Abre el panel de habilidades (importar / activar / quitar)", "Paneles"),
     ("/modelos", "Modelos y habilidades", "Abre la configuración de modelos locales probados", "Paneles"),
@@ -43,6 +44,7 @@ _SKILL_ALIASES: dict[str, tuple[str, ...]] = {
     "impeccable": ("/impecable",),
     "blender-3d": ("/blender",),
     "bases-sql": ("/sql",),
+    "control-pc": ("/pc",),
 }
 
 
@@ -209,6 +211,7 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
             "type": "prompt",
             "prompt": f"Usa las herramientas offline `generate_image` o `edit_image` para cumplir esta orden directa sin dar pasos manuales: {rest}",
             "force_programming": True,
+            "auto_autonomous": True,
         }
     if cmd == "/web":
         if not rest:
@@ -217,6 +220,7 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
             "type": "prompt",
             "prompt": f"Usa `web_search` y `fetch_url` para investigar en Internet y responder con fuentes técnicas reales: {rest}",
             "force_programming": True,
+            "auto_autonomous": True,
         }
     if cmd == "/plan":
         if not rest:
@@ -227,7 +231,7 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
             "force_programming": True,
         }
 
-    # Resolver contra cualquier habilidad instalada en SkillStore (/rea, /impeccable, /blender-3d, ...)
+    # Resolver contra cualquier habilidad instalada en SkillStore (/rea, /impeccable, /blender-3d, /pc, ...)
     catalog = build_slash_catalog(skills_store)
     for entry in catalog:
         if entry.kind != "skill":
@@ -241,11 +245,24 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
                 "type": "invoke_skill",
                 "skill_id": sid,
                 "skill_name": sname,
+                "auto_autonomous": True,
                 "prompt": (
                     f"Activa y aplica directamente la habilidad `{sname}` (id `{sid}`): "
                     f"consúltala primero con `read_skill(id='{sid}')` y ejecuta esta orden directa en el proyecto: {task}"
                 ),
             }
+
+    if cmd == "/pc":
+        task = rest or "Muestra el estado actual del sistema (CPU, RAM, discos y ventanas visibles) con pc_inspect."
+        return {
+            "type": "prompt",
+            "prompt": (
+                f"Usa `pc_inspect` para inspeccionar y `pc_control` (pedirá aprobación de 1 clic al usuario) "
+                f"para cumplir esta orden directa sobre la PC Windows: {task}"
+            ),
+            "force_programming": True,
+            "auto_autonomous": True,
+        }
 
     return {"type": "notice", "message": f"Acción `{cmd}` no encontrada. Escribe `/` para ver todas las acciones y habilidades disponibles."}
 

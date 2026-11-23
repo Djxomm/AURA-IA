@@ -75,6 +75,7 @@ class Window(QMainWindow):
   if (ROOT/'skills/reverse-engineer-anything/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','reverse-engineer-anything')
   if (ROOT/'skills/blender-3d/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','blender-3d')
   if (ROOT/'skills/impeccable/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','impeccable')
+  if (ROOT/'skills/control-pc/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','control-pc')
   self.registry=ApprovalRegistry()
   self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.client.acceleration=self.prefs.get('acceleration','auto');self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
@@ -237,6 +238,7 @@ class Window(QMainWindow):
   if getattr(self,'slash_popup',None) is not None:self.slash_popup.hide()
   text=self.input.toPlainText().strip()
   if self.busy or self.warming or not text:return
+  slash_auto=False
   if text.startswith('/'):
    from agente_ia.slash_palette import resolve_slash_command
    from agente_ia.native_terminal import launch_external_shell
@@ -262,8 +264,9 @@ class Window(QMainWindow):
       from agente_ia.skills import max_enabled_for_context
       try:self.skills.enable(resolved['skill_id'],True,max_enabled=max_enabled_for_context(self.store.get_settings().num_ctx))
       except Exception:pass
-     self.open_aurax();text=resolved['prompt']
+     slash_auto=bool(resolved.get('auto_autonomous',True));self.open_aurax();text=resolved['prompt']
     elif rtype=='prompt':
+     slash_auto=bool(resolved.get('auto_autonomous',False))
      if resolved.get('force_programming') and not self.temporary.isChecked():self.open_aurax()
      text=resolved['prompt']
   # Adjuntar automáticamente archivos reales mencionados con @ruta
@@ -276,7 +279,7 @@ class Window(QMainWindow):
   from agente_ia.project_actions import requested_actions,ProjectRunner
   actions=requested_actions(text)
   recent=self.store.get_messages(self.sid,limit=60) if self.sid else []
-  auto_on=bool(getattr(self,'autonomous',None) and self.autonomous.isChecked())
+  auto_on=bool((getattr(self,'autonomous',None) and self.autonomous.isChecked()) or slash_auto)
   if not self.temporary.isChecked() and (actions or auto_on or file_task_requested(text,recent)):self.open_aurax()
   if self.temporary.isChecked() and (self.mode.currentIndex()==1 or actions or auto_on):self.error('El modo temporal es solo conversación. Desactívalo para trabajar sobre archivos.');return
   settings=self.store.get_settings();project=settings.workspace_path
@@ -396,7 +399,7 @@ class Window(QMainWindow):
     if self.aurax is not None:self.aurax.console.appendPlainText(summary)
    if kind=='done' and self.auto_voice.isChecked():self.speak()
   elif kind=='approval':
-   p=data['proposal'];is_exec=p.action=='exec';self.floating.set_attention('Autoriza el comando propuesto.' if is_exec else 'Revisa el cambio propuesto.');d,l=self.dialog(('Autorizar comando · ' if is_exec else 'Revisar cambio · ')+p.file_path);l.addWidget(QLabel(p.reason));view=QPlainTextEdit(p.unified_diff or p.proposed_content or 'Eliminar archivo');view.setReadOnly(True);l.addWidget(view);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Yes|QDialogButtonBox.StandardButton.No);buttons.accepted.connect(d.accept);buttons.rejected.connect(d.reject);l.addWidget(buttons);data['approved']=d.exec()==QDialog.DialogCode.Accepted;data['event'].set();self.floating.set_attention('')
+   p=data['proposal'];is_pc=p.action=='pc_control';is_exec=p.action=='exec';self.floating.set_attention('Autoriza esta acción en tu PC.' if is_pc else 'Autoriza el comando propuesto.' if is_exec else 'Revisa el cambio propuesto.');d,l=self.dialog(('Autorizar control de PC · ' if is_pc else 'Autorizar comando · ' if is_exec else 'Revisar cambio · ')+p.file_path);l.addWidget(QLabel(p.reason));view=QPlainTextEdit(p.unified_diff or p.proposed_content or 'Eliminar archivo');view.setReadOnly(True);l.addWidget(view);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Yes|QDialogButtonBox.StandardButton.No);buttons.accepted.connect(d.accept);buttons.rejected.connect(d.reject);l.addWidget(buttons);data['approved']=d.exec()==QDialog.DialogCode.Accepted;data['event'].set();self.floating.set_attention('')
   elif kind=='dictated':self.dictating=False;self.mic.setToolTip('● Dictar');self.input.setPlainText(data);self.status.setText('Dictado listo. Corrige el texto y pulsa Enviar.')
   elif kind=='voice_ready':self.player.setSource(QUrl.fromLocalFile(str(data)));self.player.play();self.status.setText('Hablando · Detener corta el audio')
   elif kind=='voice_fallback':self.status.setText(data)

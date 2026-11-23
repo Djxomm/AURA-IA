@@ -304,6 +304,17 @@ class AgentEngine:
                 result = fetch_url(str(args.get("url") or ""), max_chars=int(args.get("max_chars") or 4000))
                 return True, _truncate_text(json.dumps(result, ensure_ascii=False), max(settings.max_tool_output_chars, 4200)), f"Leyó documentación web: {result['url'][:60]}"
 
+            if tc.name == "pc_inspect":
+                from .pc_control import pc_inspect
+                result = pc_inspect(
+                    workspace,
+                    str(args.get("action") or ""),
+                    query=str(args.get("query") or ""),
+                    output_path=str(args.get("output_path") or "capturas/pantalla.png"),
+                    limit=int(args.get("limit") or 25),
+                )
+                return True, _truncate_text(json.dumps(result, ensure_ascii=False), max(settings.max_tool_output_chars, 3200)), f"Inspeccionó PC ({result['action']})"
+
             return False, f"Herramienta desconocida: {tc.name}", f"Herramienta inválida {tc.name}"
         except (WorkspaceError, ValueError, TypeError, OSError, KeyError) as exc:
             return False, f"Error en {tc.name}: {exc}", f"Error en {tc.name}: {exc}"
@@ -646,7 +657,7 @@ class AgentEngine:
                         "tool_start",
                         {"id": tc.id, "name": tc.name, "arguments": tc.arguments},
                     )
-                    if tc.name in ("web_search", "fetch_url"):
+                    if tc.name in ("web_search", "fetch_url", "pc_inspect"):
                         ok, tool_output, summary = await asyncio.to_thread(self._execute_read_tool, workspace, tc, settings)
                     else:
                         ok, tool_output, summary = self._execute_read_tool(workspace, tc, settings)
@@ -806,24 +817,42 @@ class AgentEngine:
                     continue
 
                 if tc.name in EXEC_TOOLS:
-                    from .command_exec import execute_project_action, execute_workspace_command, validate_command
+                    from .command_exec import (
+                        command_requires_approval,
+                        execute_project_action,
+                        execute_workspace_command,
+                        validate_command,
+                    )
                     from .image_studio import edit_image as studio_edit_image
                     from .image_studio import generate_image as studio_generate_image
+                    from .pc_control import describe_pc_action, execute_pc_control
 
                     args = tc.arguments
-                    reason = str(args.get("reason") or "Verificación, prueba, compilación o imagen solicitada por el agente.").strip()
+                    reason = str(args.get("reason") or "Verificación, prueba, compilación, imagen o acción de PC solicitada por el agente.").strip()
                     runtime_dir = getattr(self.llm_client, "runtime", None)
                     await _emit(
                         emit,
                         "tool_start",
                         {"id": tc.id, "name": tc.name, "arguments": args},
                     )
+                    proposal_action = "exec"
+                    requires_user_approval = not settings.autonomous_mode
+                    pc_act = ""
                     try:
                         if tc.name == "run_command":
                             cmd_preview = validate_command(str(args.get("command") or ""))
                             action_label = "command"
                             target_label = "."
                             timeout_sec = int(args.get("timeout") or 120)
+                            requires_user_approval = (not settings.autonomous_mode) or command_requires_approval(cmd_preview)
+                        elif tc.name == "pc_control":
+                            pc_act = str(args.get("action") or "").strip().lower()
+                            cmd_preview = describe_pc_action(pc_act, args)
+                            action_label = f"pc:{pc_act}"
+                            target_label = str(args.get("target") or pc_act)
+                            timeout_sec = 60
+                            proposal_action = "pc_control"
+                            requires_user_approval = True
                         elif tc.name == "generate_image":
                             out_p = str(args.get("output_path") or "").strip()
                             workspace.resolve_safe_path(out_p, allow_write=True)
@@ -856,20 +885,25 @@ class AgentEngine:
                         conversation.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": err_text})
                         continue
 
-                    if settings.autonomous_mode:
+                    if not requires_user_approval:
                         decision = ApprovalDecision(approved=True, feedback="Ejecutado en modo constructor autónomo.")
                     else:
+                        approval_reason = reason
+                        if settings.autonomous_mode and tc.name == "pc_control":
+                            approval_reason = f"{reason} (Acción directa sobre la PC: requiere tu aprobación de 1 clic.)"
+                        elif settings.autonomous_mode and tc.name == "run_command":
+                            approval_reason = f"{reason} (Comando sensible: instala software, borra archivos, cierra procesos o altera remotos.)"
                         exec_proposal = PendingProposal(
                             id=f"exec_{uuid.uuid4().hex[:12]}",
                             session_id=session_id,
                             workspace_path=str(workspace.root),
                             file_path=target_label,
-                            action="exec",
-                            reason=reason,
+                            action=proposal_action,
+                            reason=approval_reason,
                             original_content=None,
                             proposed_content=cmd_preview,
                             base_hash="",
-                            unified_diff=f"$ {cmd_preview}",
+                            unified_diff=(f"PC > {cmd_preview}" if proposal_action == "pc_control" else f"$ {cmd_preview}"),
                             hunks=[],
                             added_lines=0,
                             removed_lines=0,
@@ -914,6 +948,20 @@ class AgentEngine:
                                 cancel_check=_is_cancelled,
                                 on_output=_on_line,
                             )
+                        elif tc.name == "pc_control":
+                            pc_res = await asyncio.to_thread(
+                                execute_pc_control,
+                                workspace,
+                                pc_act,
+                                args,
+                            )
+                            exec_res = {
+                                "ok": bool(pc_res.get("ok", True)),
+                                "exit_code": 0,
+                                "target": target_label,
+                                "artifact": None,
+                                "output": json.dumps(pc_res, ensure_ascii=False),
+                            }
                         elif tc.name == "generate_image":
                             img_res = await asyncio.to_thread(
                                 studio_generate_image,
@@ -924,8 +972,8 @@ class AgentEngine:
                                 negative_prompt=str(args.get("negative_prompt") or "blurry, lowres, watermark, deformed"),
                                 width=int(args.get("width") or 512),
                                 height=int(args.get("height") or 512),
-                                steps=int(args.get("steps") or 6),
-                                cfg_scale=float(args.get("cfg_scale") if args.get("cfg_scale") is not None else 1.5),
+                                steps=int(args.get("steps") or 4),
+                                cfg_scale=float(args.get("cfg_scale") if args.get("cfg_scale") is not None else 1.0),
                                 seed=int(args.get("seed") if args.get("seed") is not None else -1),
                                 threads=max(1, int(settings.num_thread or 4)),
                                 cancel_check=_is_cancelled,
@@ -947,8 +995,8 @@ class AgentEngine:
                                 prompt=str(args.get("prompt") or ""),
                                 negative_prompt=str(args.get("negative_prompt") or "blurry, lowres, watermark, deformed"),
                                 strength=float(args.get("strength") if args.get("strength") is not None else 0.55),
-                                steps=int(args.get("steps") or 6),
-                                cfg_scale=float(args.get("cfg_scale") if args.get("cfg_scale") is not None else 1.5),
+                                steps=int(args.get("steps") or 4),
+                                cfg_scale=float(args.get("cfg_scale") if args.get("cfg_scale") is not None else 1.0),
                                 operations=args.get("operations") if isinstance(args.get("operations"), list) else None,
                                 threads=max(1, int(settings.num_thread or 4)),
                                 cancel_check=_is_cancelled,
@@ -970,7 +1018,7 @@ class AgentEngine:
                                 cancel_check=_is_cancelled,
                                 on_output=_on_line,
                             )
-                    except WorkspaceError as exc:
+                    except (WorkspaceError, ValueError, TypeError, OSError) as exc:
                         err_text = f"Error al ejecutar {tc.name}: {exc}"
                         tool_traces.append({"name": tc.name, "ok": False, "summary": err_text})
                         await _emit(emit, "tool_result", {"id": tc.id, "name": tc.name, "ok": False, "summary": err_text})

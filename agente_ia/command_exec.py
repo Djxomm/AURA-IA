@@ -47,6 +47,22 @@ def validate_command(command: str) -> str:
     return text
 
 
+_APPROVAL_REQUIRED_PATTERNS = (
+    re.compile(r"(?i)\b(?:pip|pip3|uv)\s+(?:install|uninstall)\b"),
+    re.compile(r"(?i)\b(?:npm|pnpm|yarn)\s+(?:install|i|add|remove|uninstall)\b"),
+    re.compile(r"(?i)\b(?:winget|choco|msiexec|scoop)\b"),
+    re.compile(r"(?i)\b(?:taskkill|stop-process|kill)\b"),
+    re.compile(r"(?i)\b(?:remove-item|rm\s+-|del\s+|erase\s+|rmdir|rd\s+)\b"),
+    re.compile(r"(?i)\bgit\s+(?:push|reset\s+--hard|clean\s+-f)\b"),
+)
+
+
+def command_requires_approval(command: str) -> bool:
+    """Devuelve True si el comando instala software, borra archivos, cierra procesos o altera remotos."""
+    text = str(command or "").strip()
+    return any(p.search(text) for p in _APPROVAL_REQUIRED_PATTERNS)
+
+
 def _build_env(runtime: Path | None) -> dict[str, str]:
     env = os.environ.copy()
     env.update({"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8", "NO_COLOR": "1", "FORCE_COLOR": "0"})

@@ -38,6 +38,7 @@ BUILTIN_ACTIONS: tuple[tuple[str, str, str, str], ...] = (
     ("/android", "Android · UI, Depuración, ADB y Fastboot", "Crea o depura apps Android y administra teléfonos por ADB (USB/Wi-Fi) y Fastboot", "Android"),
     ("/kicad", "KiCad 10 · Esquemáticos y PCBs", "Crea diagramas electrónicos (.kicad_sch/.kicad_pro/.svg), ERC/DRC, Gerbers y STEP", "Diagramas"),
     ("/diagrama", "Diagramas de bloques, flujo y circuitos", "Genera diagramas vectoriales SVG, Mermaid y esquemáticos KiCad 10 offline", "Diagramas"),
+    ("/entrenar", "Entrenar modelos IA locales (desde 0 / LLaMA Pro)", "Enseña, diseña y prepara pipelines locales para entrenar modelos desde 0 o subirlos de categoría", "IA / ML"),
     ("/plan", "Planificar arquitectura", "Diseña un plan paso a paso antes de tocar archivos", "Agente"),
     ("/skills", "Administrar habilidades", "Abre el panel de habilidades (importar / activar / quitar)", "Paneles"),
     ("/modelos", "Modelos y habilidades", "Abre la configuración de modelos locales probados", "Paneles"),
@@ -53,6 +54,7 @@ _SKILL_ALIASES: dict[str, tuple[str, ...]] = {
     "android-adb-dev": ("/android", "/adb"),
     "kicad-diagramas": ("/kicad", "/diagrama"),
     "video-diseno-studio": ("/video", "/diseno"),
+    "entrenar-modelos-ia": ("/entrenar",),
 }
 
 
@@ -304,6 +306,18 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
             "prompt": (
                 f"Usa `generate_image`/`edit_image` y `agente_ia.video_studio` (`compose_graphic_design`, `render_cinematic_video`, "
                 f"`render_talking_avatar_video`, `generate_blender_3d_video_script`) para cumplir esta orden directa: {task}"
+            ),
+            "force_programming": True,
+            "auto_autonomous": True,
+        }
+
+    if cmd == "/entrenar":
+        task = rest or "Explícame paso a paso y prepara el pipeline local para entrenar un modelo LLM desde 0 (BPE + LlamaForCausalLM + GGUF) o escalar uno existente con LLaMA Pro."
+        return {
+            "type": "prompt",
+            "prompt": (
+                f"Aplica prácticas rigurosas de entrenamiento local de LLMs (desde cero BPE + LlamaForCausalLM + pre-entrenamiento causal + GGUF "
+                f"o expansión LLaMA Pro + SFT sin fuga de pruebas + compuerta >= 98%) para cumplir esta orden: {task}"
             ),
             "force_programming": True,
             "auto_autonomous": True,

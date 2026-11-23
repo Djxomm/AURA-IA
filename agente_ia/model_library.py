@@ -21,12 +21,20 @@ def _info(path,size,modified):
         if read(4)!=b'GGUF' or number('I') not in (2,3):raise ValueError('GGUF inválido.')
         result['tensors']=number('Q');count=number('Q')
         if count>16384:raise ValueError('Cabecera GGUF demasiado grande.')
+        def skip_array():
+            elem_kind=number('I');arr_len=number('Q')
+            if arr_len>1024*1024:raise ValueError('Array GGUF demasiado grande.')
+            if elem_kind in formats:read(struct.calcsize(formats[elem_kind])*arr_len)
+            elif elem_kind==8:
+                for _ in range(arr_len):string()
+            else:raise ValueError('Tipo de array GGUF no soportado.')
         for _ in range(count):
             key=string();kind=number('I')
             # Architecture and layer count precede the large tokenizer tables.
-            if key.startswith('tokenizer.') and 'qwen2.block_count' in result:break
+            if key.startswith('tokenizer.') and any(k.endswith('.block_count') for k in result):break
             if kind in formats:value=number(formats[kind])
             elif kind==8:value=string()
+            elif kind==9:skip_array();continue
             else:break
             result[key]=value
     return result

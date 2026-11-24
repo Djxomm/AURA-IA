@@ -115,7 +115,7 @@ class NativeClient:
    '-t',str(settings.num_thread),'-tb',str(settings.num_thread),
    '-b',prefill_batch,'-ub',ubatch,
    '-fa','on','-ctk','q8_0','-ctv','q8_0',
-   '--cache-reuse','256','-sps','0.5','--no-webui','--no-warmup',
+   '--no-webui','--no-warmup',
    '-np','1','-ngl','0','--host','127.0.0.1','--port',str(port),
   ]
   if arch=='gemma4':

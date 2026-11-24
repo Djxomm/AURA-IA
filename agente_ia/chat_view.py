@@ -8,9 +8,9 @@ from .chat_render import markdown_body
 class Bubble(QFrame):
     def __init__(self,role,content,parent=None):
         super().__init__(parent);self.role=role;self.content='';self.width_cap=600;self.setObjectName('userBubble' if role=='user' else 'auraBubble')
-        background='#d9dfe7' if role=='user' else '#14283f';foreground='#142238' if role=='user' else '#e7eff9'
-        self.setStyleSheet('QFrame#'+self.objectName()+'{background:'+background+';border:0;border-radius:10px;} QTextBrowser{background:transparent;color:'+foreground+';border:0;padding:0;selection-background-color:#316a98;selection-color:white;}')
-        layout=QVBoxLayout(self);layout.setContentsMargins(10,6,10,6);self.body=QTextBrowser();self.body.setFrameShape(QFrame.Shape.NoFrame);self.body.setOpenLinks(False);self.body.setOpenExternalLinks(False);self.body.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.body.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded);self.body.setAccessibleName('Tu mensaje' if role=='user' else 'Respuesta de AURA');self.body.document().setDocumentMargin(0);layout.addWidget(self.body)
+        background='#162339' if role=='user' else '#0f1625';border='#2c476e' if role=='user' else '#1d2b42';foreground='#f8fafc' if role=='user' else '#ecf2fa'
+        self.setStyleSheet('QFrame#'+self.objectName()+'{background:'+background+';border:1px solid '+border+';border-radius:12px;} QTextBrowser{background:transparent;color:'+foreground+';border:0;padding:0;selection-background-color:#0284c7;selection-color:white;}')
+        layout=QVBoxLayout(self);layout.setContentsMargins(12,8,12,8);self.body=QTextBrowser();self.body.setFrameShape(QFrame.Shape.NoFrame);self.body.setOpenLinks(False);self.body.setOpenExternalLinks(False);self.body.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.body.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded);self.body.setAccessibleName('Tu mensaje' if role=='user' else 'Respuesta de AURA');self.body.document().setDocumentMargin(0);layout.addWidget(self.body)
         self.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Fixed);self.body.document().documentLayout().documentSizeChanged.connect(lambda size:self.fit_height());self.set_content(content)
     def set_content(self,content):
         self.content=content
@@ -33,7 +33,7 @@ class Bubble(QFrame):
 class ChatView(QScrollArea):
     def __init__(self,parent=None):
         super().__init__(parent);self.setWidgetResizable(True);self.setFrameShape(QFrame.Shape.NoFrame);self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.rows=[];self.bubbles=[];self.welcome=None
-        self.content=QWidget();self.content.setObjectName('chatTranscript');self.layout=QVBoxLayout(self.content);self.layout.setContentsMargins(18,16,18,16);self.layout.setSpacing(10);self.layout.setAlignment(Qt.AlignmentFlag.AlignTop);self.setWidget(self.content);self.setStyleSheet('QScrollArea{background:#0b1424;border:0;} QWidget#chatTranscript{background:#0b1424;}')
+        self.content=QWidget();self.content.setObjectName('chatTranscript');self.layout=QVBoxLayout(self.content);self.layout.setContentsMargins(18,16,18,16);self.layout.setSpacing(10);self.layout.setAlignment(Qt.AlignmentFlag.AlignTop);self.setWidget(self.content);self.setStyleSheet('QScrollArea{background:#0a0e17;border:0;} QWidget#chatTranscript{background:#0a0e17;}')
     def clear_rows(self):
         while self.layout.count():
             item=self.layout.takeAt(0)

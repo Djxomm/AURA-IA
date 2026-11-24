@@ -1,4 +1,4 @@
-﻿"""AURA 3 native desktop: Qt widgets, local subprocess inference, memory and voice."""
+"""AURA 3 native desktop: Qt widgets, local subprocess inference, memory and voice."""
 from __future__ import annotations
 import argparse,asyncio,json,os,re,subprocess,sys,threading,time
 from pathlib import Path
@@ -23,33 +23,60 @@ from agente_ia.floating_companion import FloatingCompanion as FloatingAssistant
 
 ROOT=Path(sys.executable).parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parent/'runtime'
 ASSETS=Path(__file__).resolve().parent/'agente_ia/static/assets'
-STYLE='''QWidget{background:#07101e;color:#e5edf9;font-family:Segoe UI;font-size:13px;} QMainWindow,QDialog{background:#07101e;} QPushButton{background:#10253a;border:1px solid #24506a;border-radius:8px;padding:10px 13px;} QPushButton:hover{background:#164052;border-color:#00d8e6;} QPushButton:pressed{background:#086578;} QPushButton:disabled{color:#8493a8;background:#14202c;} QLineEdit,QPlainTextEdit,QTextBrowser,QListWidget,QTreeView,QComboBox,QSpinBox,QDoubleSpinBox{background:#0b1829;border:1px solid #234258;border-radius:8px;padding:8px;selection-background-color:#126176;selection-color:white;} QListWidget::item{padding:9px;} QListWidget::item:selected{background:#16455a;color:white;} QLabel#brand{font-size:25px;font-weight:bold;color:#00e9f1;} QLabel#status{color:#91dce1;padding:6px;} QSplitter::handle{background:#183446;width:2px;} QCheckBox{padding:5px;} QScrollBar:vertical{background:#091524;width:10px;} QScrollBar::handle:vertical{background:#28566b;min-height:28px;border-radius:4px;}'''
-STYLE += """
-QWidget#iconRail{background:#060e1a;} QWidget#chatArea{background:#0b1424;} QLabel#sectionLabel{color:#99adc7;font-size:11px;padding-top:8px;} QToolButton{color:#dae7f8;background:transparent;border:none;border-radius:8px;padding:4px;} QToolButton:hover{background:#18344f;} QToolButton:focus{border:1px solid #8bd2ff;} QLineEdit:focus,QPlainTextEdit:focus,QComboBox:focus{border:1px solid #8bd2ff;} QToolButton#sendButton{background:#2878c6;border-radius:18px;} QToolButton#sendButton:hover{background:#246cb5;} QToolButton#localMenu{text-align:left;padding:10px;background:#102239;}
-
-QWidget{background:#0b1424;color:#e4eaf4;}
-QMainWindow,QDialog{background:#0b1424;}
-QWidget#sidebar{background:#07101d;}
+STYLE='''
+QWidget{background:#090d16;color:#ecf2fa;font-family:"Segoe UI Variable","Segoe UI",sans-serif;font-size:13px;}
+QMainWindow,QDialog{background:#070a10;}
+QWidget#iconRail{background:#05070c;border-right:1px solid #161f2e;}
+QWidget#sidebar{background:#070b12;border-right:1px solid #161f2e;}
+QWidget#chatArea{background:#0a0e17;}
+QLabel#brand{font-size:21px;font-weight:800;letter-spacing:1.2px;color:#f8fafc;background:transparent;}
+QLabel#sectionLabel{color:#7a8da8;font-size:10px;font-weight:700;letter-spacing:1.0px;padding-top:6px;background:transparent;}
+QLabel#chatTitle{font-size:15px;font-weight:700;color:#f8fafc;background:transparent;}
+QLabel#status{color:#8fa6c6;font-size:12px;padding:4px 2px;background:transparent;}
+QLabel#footer{color:#64748b;font-size:11px;background:transparent;}
+QPushButton{background:#111827;color:#e2e8f0;border:1px solid #223047;border-radius:9px;padding:8px 13px;font-weight:600;}
+QPushButton:hover{background:#182438;border-color:#38bdf8;color:#ffffff;}
+QPushButton:pressed{background:#0c4a6e;border-color:#7dd3fc;}
+QPushButton:disabled{color:#64748b;background:#0f1521;border-color:#192233;}
 QWidget#sidebar QLabel{background:transparent;}
-QWidget#sidebar QPushButton#navButton{background:transparent;border:none;text-align:left;border-radius:7px;padding:7px 10px;color:#c9d5e6;}
-QWidget#sidebar QPushButton#navButton:hover{background:#16273c;color:#ffffff;}
-QWidget#sidebar QPushButton#newChatButton{background:#152b45;border:1px solid #294563;text-align:left;padding:10px;}
+QWidget#sidebar QPushButton#navButton{background:transparent;border:1px solid transparent;text-align:left;border-radius:8px;padding:7px 10px;color:#cbd5e1;font-weight:500;}
+QWidget#sidebar QPushButton#navButton:hover{background:#111927;border-color:#223047;color:#ffffff;}
+QWidget#sidebar QPushButton#newChatButton{background:#111c2e;border:1px solid #263b57;text-align:left;padding:9px 11px;color:#f8fafc;font-weight:600;}
+QWidget#sidebar QPushButton#newChatButton:hover{background:#172740;border-color:#38bdf8;}
 QWidget#sidebar QListWidget{background:transparent;border:none;}
-QWidget#sidebar QLineEdit{background:#0d1b2d;border:1px solid #24354d;}
-QLabel#chatTitle{font-size:16px;font-weight:600;}
-QLabel#status{color:#9cb3cf;font-size:12px;}
-QTextBrowser#conversation{background:#0b1424;border:none;font-size:15px;padding:18px 22px;}
-QWidget#composer{background:#142238;border:1px solid #2a3d58;border-radius:10px;}
-QWidget#composer QPlainTextEdit{background:transparent;border:none;font-size:14px;padding:2px 8px;}
+QWidget#sidebar QLineEdit{background:#0c121f;border:1px solid #1d293d;border-radius:8px;padding:7px 9px;color:#f1f5f9;}
+QWidget#sidebar QLineEdit:focus{border-color:#38bdf8;}
+QLineEdit,QPlainTextEdit,QTextBrowser,QListWidget,QTreeView,QComboBox,QSpinBox,QDoubleSpinBox{background:#0c121f;color:#ecf2fa;border:1px solid #1e2c42;border-radius:8px;padding:7px 9px;selection-background-color:#0284c7;selection-color:#ffffff;}
+QLineEdit:focus,QPlainTextEdit:focus,QComboBox:focus{border:1px solid #38bdf8;}
+QListWidget::item{padding:8px 9px;border-radius:7px;margin:1px 0;}
+QListWidget::item:hover{background:#121b2b;}
+QListWidget::item:selected{background:#162842;color:#ffffff;border:1px solid #2c4a73;}
+QToolButton{color:#cbd5e1;background:transparent;border:1px solid transparent;border-radius:8px;padding:4px;}
+QToolButton:hover{background:#141e30;border-color:#263750;color:#ffffff;}
+QToolButton:focus{border:1px solid #38bdf8;}
+QToolButton#sendButton{background:#0284c7;border:1px solid #38bdf8;border-radius:18px;}
+QToolButton#sendButton:hover{background:#0ea5e9;}
+QToolButton#localMenu{text-align:left;padding:9px 10px;background:#0d1422;border:1px solid #1e2c42;border-radius:9px;color:#e2e8f0;font-weight:600;}
+QToolButton#localMenu:hover{border-color:#38bdf8;background:#131e33;}
+QTextBrowser#conversation{background:#0a0e17;border:none;font-size:15px;padding:18px 22px;}
+QWidget#composer{background:#0e1522;border:1px solid #25344d;border-radius:13px;}
+QWidget#composer QPlainTextEdit{background:transparent;border:none;font-size:14px;padding:4px 8px;color:#f8fafc;}
 QWidget#composer QPushButton{background:transparent;border:none;padding:7px 10px;}
-QWidget#composer QPushButton:hover{background:#213b59;}
-QWidget#composer QPushButton#sendButton{background:#2563eb;color:white;border:none;border-radius:10px;padding:9px 18px;font-weight:600;}
-QWidget#composer QPushButton#sendButton:hover{background:#3478f6;}
-QWidget#composer QPushButton#sendButton:disabled{background:#21324b;color:#8295b2;}
+QWidget#composer QPushButton:hover{background:#182438;}
+QWidget#composer QPushButton#sendButton{background:#0284c7;color:#ffffff;border:1px solid #38bdf8;border-radius:10px;padding:9px 18px;font-weight:600;}
+QWidget#composer QPushButton#sendButton:hover{background:#0ea5e9;}
+QWidget#composer QPushButton#sendButton:disabled{background:#152033;color:#64748b;border-color:#1e293b;}
 QWidget#composer QCheckBox{background:transparent;font-size:12px;}
-QLabel#footer{color:#8c9db6;font-size:11px;background:transparent;}
-QSplitter::handle{background:#1b2a40;width:1px;}
-"""
+QCheckBox{padding:4px;color:#cbd5e1;background:transparent;}
+QSplitter::handle{background:#141c2b;width:1px;}
+QMenu{background:#0b111d;color:#f1f5f9;border:1px solid #25354f;border-radius:8px;padding:4px;}
+QMenu::item{padding:7px 14px;border-radius:6px;}
+QMenu::item:selected{background:#162944;color:#ffffff;}
+QScrollBar:vertical{background:#070a10;width:8px;margin:0;}
+QScrollBar::handle:vertical{background:#1f2e45;min-height:28px;border-radius:4px;}
+QScrollBar::handle:vertical:hover{background:#38bdf8;}
+QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}
+'''
 class Bus(QObject):event=Signal(str,object)
 def btn(text,fn):
  b=QPushButton(text);b.clicked.connect(fn);return b
@@ -83,7 +110,7 @@ class Window(QMainWindow):
   self.registry=ApprovalRegistry()
   self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.client.acceleration=self.prefs.get('acceleration','auto');self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
   self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.live_conversation=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
-  self.setWindowTitle('AURA Â· Inteligencia Artificial â€” Escritorio');self.setWindowIcon(QIcon(str(ASSETS/'aura-icono-transparente.png')));self.resize(1180,760);self.setMinimumSize(760,540)
+  self.setWindowTitle('AURA · Inteligencia Artificial — Escritorio');self.setWindowIcon(QIcon(str(ASSETS/'aura-icono-transparente.png')));self.resize(1180,760);self.setMinimumSize(760,540)
   build_shell(self,ASSETS)
   self.audio=QAudioOutput();self.player=QMediaPlayer();self.player.setAudioOutput(self.audio);self.audio.setVolume(self.prefs.get('volume',90)/100);self.player.playbackStateChanged.connect(self._on_voice_playback_changed)
   self.floating=FloatingAssistant(self)
@@ -122,9 +149,9 @@ class Window(QMainWindow):
   if enabled and not self.busy:
    self.temporary.setChecked(False)
    if self.mode.currentIndex()!=1:self.open_aurax()
-   self.status.setText('Modo constructor autÃ³nomo activo Â· edita, prueba y compila dentro del proyecto')
+   self.status.setText('Modo constructor autónomo activo · edita, prueba y compila dentro del proyecto')
   elif not enabled and not self.busy:
-   self.status.setText('Modo revisiÃ³n manual activo Â· pide aprobaciÃ³n antes de cada cambio o comando')
+   self.status.setText('Modo revisión manual activo · pide aprobación antes de cada cambio o comando')
  def open_archives(self):
   from agente_ia.archive_tools import open_dialog
   open_dialog(self)
@@ -147,20 +174,20 @@ class Window(QMainWindow):
    from agente_ia.model_library import curate_proven_models,discover
    machine=hardware_info()
    if (machine.get('ram_gib') or 0)>=15 and machine.get('cores',1)>=4 and '1.5b' in self.client.model.name.lower():
-    raw=[*(ROOT/'modelos').glob('*.gguf'),*[Path(p) for p in self.prefs.get('models',[]) if isinstance(p,str)],*discover(self.prefs.get('model_directories',['D:/IA/Modelos_AURA']))]
-    curated=curate_proven_models(raw,extra_runs_dirs=[Path(d) for d in self.prefs.get('model_runs_dirs',[]) if isinstance(d,str) and Path(d).is_dir()])
+    raw=[*(ROOT/'modelos').glob('*.gguf'),*[Path(p) for p in self.prefs.get('models',[]) if isinstance(p,str)],*discover(self.prefs.get('model_directories',[str(Path.home()/'Modelos_AURA')]))]
+    curated=curate_proven_models(raw,extra_runs_dirs=[Path(d) for d in self.prefs.get('model_runs_dirs',[]) if isinstance(d,str)])
     preferred=next((p for p in curated if '1.5b' not in p.name.lower()),None)
     if preferred:self.select_model(preferred)
    self.save_pref('coder_profile_initialized',True)
 
   if (ROOT/'skills/multilenguaje/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','multilenguaje')
   if self.aurax is None:
-   self.aurax=AuraxWorkspace(self,ROOT);self.aurax.attach_requested.connect(self.attach_aurax_file);self.aurax_dock=QDockWidget('QbitX Â· Agente y herramientas',self);self.aurax_dock.setWidget(self.aurax);self.aurax_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea);compact=self.width()<self.centralWidget().minimumSizeHint().width()+self.aurax.minimumSizeHint().width()+12;previous=self.size();self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.aurax_dock)
+   self.aurax=AuraxWorkspace(self,ROOT);self.aurax.attach_requested.connect(self.attach_aurax_file);self.aurax_dock=QDockWidget('QbitX · Agente y herramientas',self);self.aurax_dock.setWidget(self.aurax);self.aurax_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea);compact=self.width()<self.centralWidget().minimumSizeHint().width()+self.aurax.minimumSizeHint().width()+12;previous=self.size();self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.aurax_dock)
    if compact:
     self.aurax_dock.setFloating(True);area=self.screen().availableGeometry();self.aurax_dock.resize(min(860,area.width()-40),min(620,area.height()-40));self.resize(previous)
   self.aurax_dock.show();self.aurax_dock.raise_()
   if self.mode.currentIndex()!=1:self.mode.setCurrentIndex(1)
-  self.temporary.setChecked(False);self.input.setPlaceholderText('Pide a AURAX crear, revisar o corregir archivos del proyectoâ€¦')
+  self.temporary.setChecked(False);self.input.setPlaceholderText('Pide a AURAX crear, revisar o corregir archivos del proyecto…')
  def attach_chat_files(self):
   if self.guarded():return
   root=Path(self.store.get_settings().workspace_path).resolve()
@@ -197,16 +224,18 @@ class Window(QMainWindow):
   if self.prefs.get('floating',True):self.floating.show()
   splash=self.startup;self.startup=None
   if splash is not None:splash.release()
- def save_pref(self,key,value):self.prefs[key]=value;self.prefs_path.write_text(json.dumps(self.prefs,ensure_ascii=False,indent=2),'utf-8')
+ def save_pref(self,key,value):
+  self.prefs[key]=value;self.prefs_path.write_text(json.dumps(self.prefs,ensure_ascii=False,indent=2),'utf-8')
+  if key=='animations' and getattr(self,'avatar_stage',None) is not None:self.avatar_stage.set_animations_enabled(bool(value))
  def error(self,e):QMessageBox.warning(self,'AURA',str(e))
  def guarded(self):
-  if self.busy or self.warming:self.error('DetÃ©n o espera la respuesta antes de cambiar esta configuraciÃ³n.');return True
+  if self.busy or self.warming:self.error('Detén o espera la respuesta antes de cambiar esta configuración.');return True
   return False
  def dialog(self,title):
   d=QDialog(self);d.setWindowTitle(title);d.resize(760,560);outer=QVBoxLayout(d);scroll=QScrollArea();scroll.setWidgetResizable(True);body=QWidget();layout=QVBoxLayout(body);scroll.setWidget(body);outer.addWidget(scroll);return d,layout
  def new_chat(self):
   if self.busy:return
-  self.sid=None;self.items=[];self.heading.setText('Nueva conversaciÃ³n');self.render()
+  self.sid=None;self.items=[];self.heading.setText('Nueva conversación');self.render()
  def refresh_history(self):
   self.history.clear()
   for s in self.store.list_sessions(limit=200):
@@ -217,27 +246,46 @@ class Window(QMainWindow):
  def select_chat(self,item):
   if self.busy:return
   self.sid=item.data(Qt.ItemDataRole.UserRole);s=self.store.get_session(self.sid);self.heading.setText(s['title']);self.items=[(x['role'],x['content']) for x in self.store.get_messages(self.sid)];self.render()
+ def sync_avatar_persona(self):
+  from agente_ia.chat_controls import model_label
+  lbl=model_label(self.client.model)
+  if getattr(self,'avatar_stage',None) is not None:self.avatar_stage.set_model(self.client.model,lbl)
+  if getattr(self,'floating',None) is not None and hasattr(self.floating,'set_model_persona'):self.floating.set_model_persona(self.client.model)
  def render(self):
   if not self.items:
-   self.chat.set_welcome('<div style="text-align:center;margin-top:40px"><img width="110" src="'+(ASSETS/'aura-logo-transparente.png').as_uri()+'"><h1 style="color:#00e9f1">AURA IA</h1><p>Â¿En quÃ© trabajamos hoy?</p><p>Elige tu proyecto o empieza una conversaciÃ³n.</p></div>')
+   from agente_ia.avatar_3d import persona_meta,resolve_avatar_persona
+   from agente_ia.chat_controls import model_label
+   meta=persona_meta(resolve_avatar_persona(self.client.model))
+   lbl=model_label(self.client.model)
+   self.chat.set_welcome(
+    '<div style="text-align:center;margin-top:54px;font-family:Segoe UI,sans-serif;">'
+    '<div style="font-size:11px;letter-spacing:2.5px;color:'+meta.accent+';font-weight:700;">AURA STUDIO · WORKSPACE LOCAL</div>'
+    '<h1 style="color:#f8fafc;font-size:28px;margin:10px 0 6px 0;font-weight:800;">'+lbl+'</h1>'
+    '<p style="color:#94a3b8;font-size:14px;margin:0 0 18px 0;">'+meta.subtitle+' · 100 % offline en tu equipo</p>'
+    '<p style="color:#cbd5e1;font-size:13px;">Escribe tu orden, usa <code style="color:'+meta.accent_soft+'">/</code> para agentes y comandos, o abre <b>AURAX · QbitX</b> y <b>Codex / OpenCode · AURA</b>.</p>'
+    '</div>'
+   )
   else:self.chat.set_messages(self.items)
   self.chat.scroll_to_end()
  def prepare_model(self):
   if self.busy or self.warming:return
-  self.warming=True;self.send_button.setEnabled(False);self.started=time.monotonic();self.status.setText('Preparando cachÃ© del modelo para acelerar las consultasâ€¦');settings=self.store.get_settings().model_copy(update={'max_predict_tokens':1})
+  self.warming=True;self.send_button.setEnabled(False);self.started=time.monotonic();self.status.setText('Preparando caché del modelo para acelerar las consultas…');settings=self.store.get_settings().model_copy(update={'max_predict_tokens':1})
   def work():
    try:self.client.generate(settings,[{'role':'system','content':conversation_prompt(settings)},{'role':'user','content':'Hola'}],lambda text:None);self.bus.event.emit('warmed',None)
    except Exception as e:self.bus.event.emit('warmed',str(e))
   threading.Thread(target=work,daemon=True).start()
  def progress(self):
   speaking=self.player.playbackState()==QMediaPlayer.PlaybackState.PlayingState
-  if self.floating.isVisible():self.floating.update_state(self.busy or self.warming or self.dictating or speaking,'Escuchandoâ€¦' if self.dictating else 'Hablandoâ€¦' if speaking else 'Preparando el modeloâ€¦' if self.warming else 'Pensando y trabajandoâ€¦' if self.busy else 'Lista. Â¿En quÃ© te ayudo?')
+  av_state='listening' if self.dictating else 'speaking' if speaking else 'working' if (self.busy and getattr(self,'command_runner',None) is not None) else 'thinking' if (self.busy or self.warming) else 'idle'
+  av_text='Escuchando…' if self.dictating else 'Hablando…' if speaking else 'Preparando el modelo…' if self.warming else 'Ejecutando herramientas…' if av_state=='working' else 'Pensando paso a paso…' if self.busy else 'En línea · listo'
+  if getattr(self,'avatar_stage',None) is not None:self.avatar_stage.set_state(av_state,av_text)
+  if self.floating.isVisible():self.floating.update_state(self.busy or self.warming or self.dictating or speaking,av_text,avatar_state=av_state)
   if getattr(self,'render_pending',False):
    self.render_pending=False;delta=self.answer[getattr(self,'drawn',0):];self.chat.append_to_last(delta);self.drawn=len(self.answer)
   if self.warming:
-   elapsed=str(round(time.monotonic()-self.started,1))+' s';self.status.setText('Preparando AURA Â· '+elapsed)
+   elapsed=str(round(time.monotonic()-self.started,1))+' s';self.status.setText('Preparando AURA · '+elapsed)
   if self.busy:
-   first=self.client.first_text;self.status.setText((getattr(self.command_runner,'label','QbitX trabajando') if getattr(self,'command_runner',None) is not None else getattr(self,'task_stage','Generando') if first else 'Preparando modelo y contexto')+' Â· '+str(round(time.monotonic()-self.started,1))+' s'+(' Â· primer texto '+str(round(first,2))+' s' if first else ''))
+   first=self.client.first_text;self.status.setText((getattr(self.command_runner,'label','QbitX trabajando') if getattr(self,'command_runner',None) is not None else getattr(self,'task_stage','Generando') if first else 'Preparando modelo y contexto')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(first,2))+' s' if first else ''))
  def send(self):
   if getattr(self,'slash_popup',None) is not None:self.slash_popup.hide()
   text=self.input.toPlainText().strip()
@@ -257,10 +305,10 @@ class Window(QMainWindow):
      except Exception as exc:self.error(exc)
      return
     if rtype=='toggle_autonomous':
-     self.input.clear();arg=resolved.get('arg','').lower();target=True if arg in ('on','si','sÃ­','1','activar') else False if arg in ('off','no','0','desactivar') else not self.autonomous.isChecked()
+     self.input.clear();arg=resolved.get('arg','').lower();target=True if arg in ('on','si','sí','1','activar') else False if arg in ('off','no','0','desactivar') else not self.autonomous.isChecked()
      self.autonomous.setChecked(target);return
     if rtype=='toggle_live_conversation':
-     self.input.clear();arg=resolved.get('arg','').lower();target=True if arg in ('on','si','sÃ­','1','iniciar','activar') else False if arg in ('off','no','0','detener','salir') else None
+     self.input.clear();arg=resolved.get('arg','').lower();target=True if arg in ('on','si','sí','1','iniciar','activar') else False if arg in ('off','no','0','detener','salir') else None
      self.toggle_live_conversation(target);return
     if rtype=='switch_zamara':
      cand=next((p for p in self.list_available_models() if 'zamara' in p.name.lower() or 'gemma-4-e4b' in p.name.lower()),None)
@@ -296,7 +344,7 @@ class Window(QMainWindow):
      if resolved.get('thinking_effort'):slash_effort=resolved['thinking_effort']
      if resolved.get('force_programming') and not self.temporary.isChecked():self.open_aurax()
      text=resolved['prompt']
-  # Adjuntar automÃ¡ticamente archivos reales mencionados con @ruta
+  # Adjuntar automáticamente archivos reales mencionados con @ruta
   ws_root=Path(self.store.get_settings().workspace_path).resolve()
   for m in re.findall(r'(?:^|\s)@([A-Za-z0-9_./-]+\.[A-Za-z0-9_]+)',text):
    cand=(ws_root/m).resolve()
@@ -308,7 +356,7 @@ class Window(QMainWindow):
   recent=self.store.get_messages(self.sid,limit=60) if self.sid else []
   auto_on=bool((getattr(self,'autonomous',None) and self.autonomous.isChecked()) or slash_auto)
   if not self.temporary.isChecked() and (actions or auto_on or file_task_requested(text,recent)):self.open_aurax()
-  if self.temporary.isChecked() and (self.mode.currentIndex()==1 or actions or auto_on):self.error('El modo temporal es solo conversaciÃ³n. DesactÃ­valo para trabajar sobre archivos.');return
+  if self.temporary.isChecked() and (self.mode.currentIndex()==1 or actions or auto_on):self.error('El modo temporal es solo conversación. Desactívalo para trabajar sobre archivos.');return
   settings=self.store.get_settings();project=settings.workspace_path
   if auto_on and not settings.autonomous_mode:settings=settings.model_copy(update={'autonomous_mode':True})
   if locals().get('slash_effort'):settings=settings.model_copy(update={'thinking_effort':slash_effort})
@@ -317,13 +365,13 @@ class Window(QMainWindow):
    settings=programming_settings(settings,self.prefs.get('stable_code',True))
   if text.lower().startswith(('recuerda:','recuerda esto:')):
    if self.temporary.isChecked():self.error('Desactiva Temporal para guardar recuerdos.');return
-   try:self.memory.save(text.split(':',1)[1],project,'Solicitud explÃ­cita del usuario');self.items.extend([('user',text),('assistant','Recuerdo guardado para este proyecto. Puedes editarlo en Memoria.')]);self.input.clear();self.render()
+   try:self.memory.save(text.split(':',1)[1],project,'Solicitud explícita del usuario');self.items.extend([('user',text),('assistant','Recuerdo guardado para este proyecto. Puedes editarlo en Memoria.')]);self.input.clear();self.render()
    except Exception as e:self.error(e)
    return
   preferred=None
   if actions and self.aurax is not None:
    from PySide6.QtCore import QProcess
-   if self.aurax.process.state()!=QProcess.ProcessState.NotRunning:self.error('Hay un proceso activo en QbitX. DetÃ©nlo antes de iniciar otro.');return
+   if self.aurax.process.state()!=QProcess.ProcessState.NotRunning:self.error('Hay un proceso activo en QbitX. Deténlo antes de iniciar otro.');return
    editor=self.aurax.tabs.currentWidget()
    if editor is not None:
     preferred=editor.path
@@ -332,7 +380,7 @@ class Window(QMainWindow):
    preferred=next((change['file_path'] for change in self.store.list_changes(self.sid) if change['status']=='applied' and str(Path(change['workspace_path']).resolve())==str(Path(project).resolve())),None)
   self.command_runner=ProjectRunner(ROOT) if actions else None
   if actions:self.client.first_text=None;self.client.effective_context=None
-  self.task_stage='QbitX Â· Preparando herramientas' if actions else 'Generando'
+  self.task_stage='QbitX · Preparando herramientas' if actions else 'Generando'
   self.input.clear();self.items.append(('user',text));self.items.append(('assistant',''));self.answer='';self.drawn=0;self.render();self.busy=True;self.chat_controls.setEnabled(False);self.send_button.setEnabled(True);self.send_button.setIcon(icon('stop'));self.send_button.setAccessibleName('Detener respuesta');self.send_button.setToolTip('Detener respuesta');self.temporary.setEnabled(False);self.mode.setEnabled(False);self.started=time.monotonic();self.run_changes=0;temporary=self.temporary.isChecked();programming=self.mode.currentIndex()==1
   if not self.sid and not temporary:self.sid=self.store.create_session(title=text[:48],workspace_path=project,provider='nativo',model=self.client.model.name)['id']
   if hasattr(self.client,'cancelled'):self.client.cancelled.clear()
@@ -382,7 +430,7 @@ class Window(QMainWindow):
       result=self.command_runner.run(project,text,actions,preferred,lambda line:self.bus.event.emit('command_output',line))
      except Exception as runner_exc:
       if auto_on or programming:
-       escalate_err=f'QbitX no encontrÃ³ un plan fijo ({runner_exc}); continÃºa tÃº en modo Codex/Claude Code inspeccionando el proyecto y ejecutando el comando real de compilaciÃ³n/pruebas.'
+       escalate_err=f'QbitX no encontró un plan fijo ({runner_exc}); continúa tú en modo Codex/Claude Code inspeccionando el proyecto y ejecutando el comando real de compilación/pruebas.'
        result=None
       else:
        raise
@@ -392,20 +440,20 @@ class Window(QMainWindow):
       self.engine.coordinator.begin(sid,str(Path(project).resolve()),text)
       for command in result['commands']:self.engine.coordinator.execution(sid,str(Path(project).resolve()),command['action'],result.get('target','.'),command['exit_code'],output=result['content'])
       if result['status']=='error' and auto_on and not self.client.cancelled.is_set():
-       escalate_err=f"La compilaciÃ³n/prueba inicial de QbitX fallÃ³. Diagnostica el error real, repara el cÃ³digo y vuelve a compilar/probar hasta lograr cÃ³digo de salida 0:\n{result['content'][-1800:]}"
+       escalate_err=f"La compilación/prueba inicial de QbitX falló. Diagnostica el error real, repara el código y vuelve a compilar/probar hasta lograr código de salida 0:\n{result['content'][-1800:]}"
       else:
        self.store.add_message(sid,'user',text)
        self.store.add_message(sid,'assistant',result['content'],metadata={'execution':result['commands'],'status':result['status']})
        self.bus.event.emit('done' if result['status']=='done' else 'failed',result['content'])
      if escalate_err is not None:
-      self.bus.event.emit('command_output','QbitX Â· Escalando automÃ¡ticamente al agente constructor (modo Codex/Claude Code) para diagnosticar y repararâ€¦')
+      self.bus.event.emit('command_output','QbitX · Escalando automáticamente al agente constructor (modo Codex/Claude Code) para diagnosticar y reparar…')
       auto_res=asyncio.run(run_autonomous_turn(text,context+'\n'+escalate_err))
-      if auto_res.get('status') not in ('completed','done','success') and not auto_res.get('content'):raise RuntimeError(auto_res.get('error','No se completÃ³ la reparaciÃ³n automÃ¡tica.'))
+      if auto_res.get('status') not in ('completed','done','success') and not auto_res.get('content'):raise RuntimeError(auto_res.get('error','No se completó la reparación automática.'))
       self.bus.event.emit('done',auto_res.get('content',self.answer))
     elif programming:
      # Keep the user's original task in history; memory is supplied as attached user context.
      result=asyncio.run(run_autonomous_turn(text,context))
-     if result.get('status') not in ('completed','done','success') and not result.get('content'):raise RuntimeError(result.get('error','No se completÃ³ la tarea.'))
+     if result.get('status') not in ('completed','done','success') and not result.get('content'):raise RuntimeError(result.get('error','No se completó la tarea.'))
      self.bus.event.emit('done',result.get('content',self.answer))
     else:
      messages=[{'role':'system','content':conversation_prompt(settings)+context}]
@@ -421,7 +469,7 @@ class Window(QMainWindow):
   threading.Thread(target=work,daemon=True).start();self.refresh_history()
  def handle_event(self,kind,data):
   if kind=='vision_progress':self.status.setText(str(data));return
-  if kind=='warmed':self.warming=False;self.send_button.setEnabled(True);self.status.setText('Lista para ayudarte' if data is None else 'PreparaciÃ³n cancelada o fallida. Puedes reintentar al enviar.');self.finish_startup();return
+  if kind=='warmed':self.warming=False;self.send_button.setEnabled(True);self.status.setText('Lista para ayudarte' if data is None else 'Preparación cancelada o fallida. Puedes reintentar al enviar.');self.finish_startup();return
   if kind=='command_output':
    if self.aurax is not None:self.aurax.console.appendPlainText(str(data))
   elif kind=='token':self.answer+=data;self.items[-1]=('assistant',self.answer);self.render_pending=True
@@ -444,34 +492,34 @@ class Window(QMainWindow):
    elif event=='done':self.answer=payload.get('content',self.answer)
   elif kind in ('done','failed'):
    self.render_pending=False;self.drawn=len(self.answer)
-   answer=data if kind=='done' else 'No se completÃ³ la respuesta: '+data
-   self.items[-1]=('assistant',answer);self.last_answer=answer;self.busy=False;self.chat_controls.setEnabled(True);self.send_button.setEnabled(True);self.send_button.setIcon(icon('send','#ffffff'));self.send_button.setAccessibleName('Enviar mensaje');self.send_button.setToolTip('Enviar mensaje');self.temporary.setEnabled(True);self.mode.setEnabled(True);self.render();self.refresh_history();self.status.setText(('Respuesta terminada' if kind=='done' else 'AtenciÃ³n requerida')+' Â· '+str(round(time.monotonic()-self.started,1))+' s'+(' Â· primer texto '+str(round(self.client.first_text,2))+' s' if self.client.first_text else ''))
-   if self.client.effective_context and self.client.effective_context!=self.store.get_settings().num_ctx:self.status.setText(self.status.text()+' Â· contexto efectivo: '+str(self.client.effective_context))
+   answer=data if kind=='done' else 'No se completó la respuesta: '+data
+   self.items[-1]=('assistant',answer);self.last_answer=answer;self.busy=False;self.chat_controls.setEnabled(True);self.send_button.setEnabled(True);self.send_button.setIcon(icon('send','#ffffff'));self.send_button.setAccessibleName('Enviar mensaje');self.send_button.setToolTip('Enviar mensaje');self.temporary.setEnabled(True);self.mode.setEnabled(True);self.render();self.refresh_history();self.status.setText(('Respuesta terminada' if kind=='done' else 'Atención requerida')+' · '+str(round(time.monotonic()-self.started,1))+' s'+(' · primer texto '+str(round(self.client.first_text,2))+' s' if self.client.first_text else ''))
+   if self.client.effective_context and self.client.effective_context!=self.store.get_settings().num_ctx:self.status.setText(self.status.text()+' · contexto efectivo: '+str(self.client.effective_context))
    if kind=='done' and self.mode.currentIndex()==1:
-    summary='QbitX Â· Acciones ejecutadas en el proyecto' if getattr(self,'command_runner',None) is not None else 'AURAX Â· '+str(getattr(self,'run_changes',0))+' cambios aplicados' if getattr(self,'run_changes',0) else 'AURAX Â· respuesta sin cambios en archivos';self.status.setText(self.status.text()+' Â· '+summary)
+    summary='QbitX · Acciones ejecutadas en el proyecto' if getattr(self,'command_runner',None) is not None else 'AURAX · '+str(getattr(self,'run_changes',0))+' cambios aplicados' if getattr(self,'run_changes',0) else 'AURAX · respuesta sin cambios en archivos';self.status.setText(self.status.text()+' · '+summary)
     if self.aurax is not None:self.aurax.console.appendPlainText(summary)
    if kind=='done' and (self.auto_voice.isChecked() or self.live_conversation):self.speak()
-   elif kind=='failed' and self.live_conversation:self.live_conversation=False;self.status.setText('ConversaciÃ³n en vivo pausada por error.')
+   elif kind=='failed' and self.live_conversation:self.live_conversation=False;self.status.setText('Conversación en vivo pausada por error.')
   elif kind=='approval':
-   p=data['proposal'];is_pc=p.action=='pc_control';is_exec=p.action=='exec';self.floating.set_attention('Autoriza esta acciÃ³n en tu PC.' if is_pc else 'Autoriza el comando propuesto.' if is_exec else 'Revisa el cambio propuesto.');d,l=self.dialog(('Autorizar control de PC Â· ' if is_pc else 'Autorizar comando Â· ' if is_exec else 'Revisar cambio Â· ')+p.file_path);l.addWidget(QLabel(p.reason));view=QPlainTextEdit(p.unified_diff or p.proposed_content or 'Eliminar archivo');view.setReadOnly(True);l.addWidget(view);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Yes|QDialogButtonBox.StandardButton.No);buttons.accepted.connect(d.accept);buttons.rejected.connect(d.reject);l.addWidget(buttons);data['approved']=d.exec()==QDialog.DialogCode.Accepted;data['event'].set();self.floating.set_attention('')
-  elif kind=='dictated':self.dictating=False;self.mic.setToolTip('â— Dictar');self.input.setPlainText(data);self.status.setText('Dictado listo. Corrige el texto y pulsa Enviar.')
+   p=data['proposal'];is_pc=p.action=='pc_control';is_exec=p.action=='exec';self.floating.set_attention('Autoriza esta acción en tu PC.' if is_pc else 'Autoriza el comando propuesto.' if is_exec else 'Revisa el cambio propuesto.');d,l=self.dialog(('Autorizar control de PC · ' if is_pc else 'Autorizar comando · ' if is_exec else 'Revisar cambio · ')+p.file_path);l.addWidget(QLabel(p.reason));view=QPlainTextEdit(p.unified_diff or p.proposed_content or 'Eliminar archivo');view.setReadOnly(True);l.addWidget(view);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Yes|QDialogButtonBox.StandardButton.No);buttons.accepted.connect(d.accept);buttons.rejected.connect(d.reject);l.addWidget(buttons);data['approved']=d.exec()==QDialog.DialogCode.Accepted;data['event'].set();self.floating.set_attention('')
+  elif kind=='dictated':self.dictating=False;self.mic.setToolTip('● Dictar');self.input.setPlainText(data);self.status.setText('Dictado listo. Corrige el texto y pulsa Enviar.')
   elif kind=='live_heard':
-   self.dictating=False;self.mic.setToolTip('â— Dictar')
+   self.dictating=False;self.mic.setToolTip('● Dictar')
    heard=str(data or '').strip()
    if not self.live_conversation:return
    if not heard:
     QTimer.singleShot(350,self._listen_live_turn);return
    low=heard.lower()
-   if any(phrase in low for phrase in ('deten conversacion','detÃ©n conversaciÃ³n','detener conversacion','detener conversaciÃ³n','salir de voz','terminar conversacion','terminar conversaciÃ³n','adios aura','adiÃ³s aura','adios mateo','adiÃ³s mateo')):
-    self.live_conversation=False;self.status.setText('ConversaciÃ³n en vivo terminada.');return
+   if any(phrase in low for phrase in ('deten conversacion','detén conversación','detener conversacion','detener conversación','salir de voz','terminar conversacion','terminar conversación','adios aura','adiós aura','adios mateo','adiós mateo')):
+    self.live_conversation=False;self.status.setText('Conversación en vivo terminada.');return
    self.input.setPlainText(heard);self.send()
-  elif kind=='voice_ready':self.player.setSource(QUrl.fromLocalFile(str(data)));self.player.play();self.status.setText('Hablando con voz natural Â· Detener corta el audio')
+  elif kind=='voice_ready':self.player.setSource(QUrl.fromLocalFile(str(data)));self.player.play();self.status.setText('Hablando con voz natural · Detener corta el audio')
   elif kind=='voice_fallback':self.status.setText(data)
   elif kind=='notice':self.error(data)
  def stop(self):
   self.live_conversation=False
   if getattr(self,'command_runner',None) is not None:self.command_runner.stop()
-  self.voice_generation+=1;self.client.stop();self.dictation.stop();self.player.stop();self.dictating=False;self.mic.setToolTip('â— Dictar');p=self.voice_process;self.voice_process=None;self.status.setText('Deteniendoâ€¦');p.terminate() if p is not None and p.poll() is None else None
+  self.voice_generation+=1;self.client.stop();self.dictation.stop();self.player.stop();self.dictating=False;self.mic.setToolTip('● Dictar');p=self.voice_process;self.voice_process=None;self.status.setText('Deteniendo…');p.terminate() if p is not None and p.poll() is None else None
  def settings(self,page_index=0):
   if self.guarded():return
   hub=SettingsHub(self)
@@ -500,7 +548,7 @@ class Window(QMainWindow):
     sel=editor.textCursor().selectedText().replace('\u2029','\n').strip()
     if sel:ctx_parts.append('Fragmento seleccionado por el usuario en AURAX:\n'+sel[:1200])
    err_txt=(extra_error or (self.aurax.last_console_output if getattr(self.aurax,'last_exit_code',0) not in (0,None) else '')).strip()
-   if include_error and err_txt:ctx_parts.append('Ãšltima salida/error real de consola AURAX:\n'+err_txt[-1400:])
+   if include_error and err_txt:ctx_parts.append('Última salida/error real de consola AURAX:\n'+err_txt[-1400:])
   self._bubble_extra_context='\n'.join(ctx_parts)
   self.input.setPlainText(clean)
   self.send()
@@ -508,13 +556,13 @@ class Window(QMainWindow):
   if self.guarded():return
   folder=self.client.data/'cache'
   for path in folder.glob('*.bin'):path.unlink(missing_ok=True)
-  self.status.setText('CachÃ© borrada. La prÃ³xima consulta puede tardar mÃ¡s.')
+  self.status.setText('Caché borrada. La próxima consulta puede tardar más.')
  def list_available_models(self):
   paths=sorted((ROOT/'modelos').glob('*.gguf'));registered=self.prefs.get('models',[])
   reg_list=[p for p in registered if isinstance(p,str)] if isinstance(registered,list) else []
   paths.extend(Path(p) for p in reg_list)
   from agente_ia.model_library import curate_proven_models,discover
-  paths.extend(discover(self.prefs.get('model_directories',['D:/IA/Modelos_AURA'])))
+  paths.extend(discover(self.prefs.get('model_directories',[str(Path.home()/'Modelos_AURA')])))
   extra=[Path(d) for d in self.prefs.get('model_runs_dirs',[]) if isinstance(d,str) and Path(d).is_dir()]
   return curate_proven_models(paths,current=self.client.model,extra_runs_dirs=extra,explicit_models=reg_list)
  def refresh_chat_controls(self):
@@ -532,14 +580,14 @@ class Window(QMainWindow):
   try:
    p=Path(path).resolve()
    with p.open('rb') as f:
-    if f.read(4)!=b'GGUF':raise ValueError('GGUF invÃ¡lido.')
+    if f.read(4)!=b'GGUF':raise ValueError('GGUF inválido.')
    from agente_ia.model_library import model_info
    arch=model_info(p).get('general.architecture')
    if arch not in {'qwen2','qwen3','gpt-oss','llama','gemma4','mistral','phi3','deepseek2'}:raise ValueError('Modelo no compatible: usa Qwen2/Qwen3, Llama, Gemma, Mistral o GPT-oss GGUF.')
    registered=self.prefs.get('models',[]);registered=registered if isinstance(registered,list) else [];self.save_pref('models',list(dict.fromkeys([str(p),*[v for v in registered if isinstance(v,str)]])))
    from agente_ia.chat_controls import model_label
    if hasattr(self.client,'close'):self.client.close()
-   self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();self.status.setText('Modelo seleccionado: '+model_label(p))
+   self.client.model=p;self.save_pref('model',str(p));self.sync_avatar_persona();self.refresh_chat_controls();self.render();self.status.setText('Modelo seleccionado: '+model_label(p))
   except (OSError,ValueError) as exc:self.error(str(exc));self.refresh_chat_controls()
  def models(self):
   self.settings(page_index=1)
@@ -557,21 +605,21 @@ class Window(QMainWindow):
    self.store.save_settings(self.store.get_settings().model_copy(update={'workspace_path':str(p)}));self.attached_files.clear();self.new_chat();d.accept()
   l.addWidget(btn('Usar proyecto',apply));d.exec()
  def memory_panel(self):
-  d,l=self.dialog('Memoria local');search=QLineEdit();search.setPlaceholderText('Buscar recuerdosâ€¦');l.addWidget(search);listing=QListWidget();l.addWidget(listing);editor=QPlainTextEdit();editor.setPlaceholderText('Recuerdo confirmado o tarea pendienteâ€¦');l.addWidget(editor);origin=QLabel('Origen del recuerdo: indicaciÃ³n explÃ­cita del usuario');origin.setWordWrap(True);l.addWidget(origin);scope=QComboBox();scope.addItems(['Este proyecto','General']);l.addWidget(scope);rows=[];selection=[None]
+  d,l=self.dialog('Memoria local');search=QLineEdit();search.setPlaceholderText('Buscar recuerdos…');l.addWidget(search);listing=QListWidget();l.addWidget(listing);editor=QPlainTextEdit();editor.setPlaceholderText('Recuerdo confirmado o tarea pendiente…');l.addWidget(editor);origin=QLabel('Origen del recuerdo: indicación explícita del usuario');origin.setWordWrap(True);l.addWidget(origin);scope=QComboBox();scope.addItems(['Este proyecto','General']);l.addWidget(scope);rows=[];selection=[None]
   def refresh():
    rows[:]=self.memory.list();listing.clear()
    for r in rows:
-    item=QListWidgetItem(('Proyecto Â· ' if r['project'] else 'General Â· ')+r['content'][:140]);item.setData(Qt.ItemDataRole.UserRole,r);item.setHidden(search.text().lower() not in r['content'].lower());listing.addItem(item)
+    item=QListWidgetItem(('Proyecto · ' if r['project'] else 'General · ')+r['content'][:140]);item.setData(Qt.ItemDataRole.UserRole,r);item.setHidden(search.text().lower() not in r['content'].lower());listing.addItem(item)
   def select(item):
-   r=item.data(Qt.ItemDataRole.UserRole);selection[0]=r;editor.setPlainText(r['content']);scope.setCurrentIndex(0 if r['project'] else 1);origin.setText('Origen: '+r['source']+' Â· Proyecto: '+(r['project'] or 'General'))
+   r=item.data(Qt.ItemDataRole.UserRole);selection[0]=r;editor.setPlainText(r['content']);scope.setCurrentIndex(0 if r['project'] else 1);origin.setText('Origen: '+r['source']+' · Proyecto: '+(r['project'] or 'General'))
   listing.itemClicked.connect(select);search.textChanged.connect(refresh)
   def new():selection[0]=None;editor.clear()
   def save():
    try:
-    old=selection[0];project=(old['project'] if old and old['project'] else self.store.get_settings().workspace_path) if scope.currentIndex()==0 else '';self.memory.save(editor.toPlainText(),project,'EdiciÃ³n del usuario',old['id'] if old else None);refresh();new()
+    old=selection[0];project=(old['project'] if old and old['project'] else self.store.get_settings().workspace_path) if scope.currentIndex()==0 else '';self.memory.save(editor.toPlainText(),project,'Edición del usuario',old['id'] if old else None);refresh();new()
    except Exception as e:self.error(e)
   def delete():
-   if selection[0] and QMessageBox.question(d,'Olvidar','Â¿Eliminar este recuerdo?')==QMessageBox.StandardButton.Yes:self.memory.delete(selection[0]['id']);refresh();new()
+   if selection[0] and QMessageBox.question(d,'Olvidar','¿Eliminar este recuerdo?')==QMessageBox.StandardButton.Yes:self.memory.delete(selection[0]['id']);refresh();new()
   def export():
    p,_=QFileDialog.getSaveFileName(d,'Exportar memoria','memoria-aura.json','JSON (*.json)')
    if p:Path(p).write_text(json.dumps(self.memory.list(),ensure_ascii=False,indent=2),'utf-8')
@@ -581,7 +629,7 @@ class Window(QMainWindow):
    try:
     if Path(p).stat().st_size>2_000_000:raise ValueError('El archivo supera 2 MB.')
     data=json.loads(Path(p).read_text('utf-8-sig'))
-    if not isinstance(data,list) or len(data)>2000:raise ValueError('Formato de memoria invÃ¡lido.')
+    if not isinstance(data,list) or len(data)>2000:raise ValueError('Formato de memoria inválido.')
     for r in data:self.memory.save(r['content'],r.get('project',''),'Importado por el usuario')
     refresh()
    except Exception as e:self.error(e)
@@ -594,7 +642,7 @@ class Window(QMainWindow):
   from agente_ia.skills import max_enabled_for_context,MAX_FILE_BYTES_IMPORT
   effective_ctx=max(self.store.get_settings().num_ctx,context_profile(self.client.model)['automatic'])
   limit=max_enabled_for_context(effective_ctx)
-  d,l=self.dialog('Habilidades');note=QLabel(f'LÃ­mite ajustado al contexto de tu equipo ({effective_ctx} tokens): hasta {limit} habilidades activas Â· archivos .md hasta {MAX_FILE_BYTES_IMPORT//1024} KB.');note.setWordWrap(True);l.addWidget(note);listing=QListWidget();l.addWidget(listing)
+  d,l=self.dialog('Habilidades');note=QLabel(f'Límite ajustado al contexto de tu equipo ({effective_ctx} tokens): hasta {limit} habilidades activas · archivos .md hasta {MAX_FILE_BYTES_IMPORT//1024} KB.');note.setWordWrap(True);l.addWidget(note);listing=QListWidget();l.addWidget(listing)
   def refresh():
    listing.clear()
    for skill in self.skills.catalog():
@@ -613,14 +661,14 @@ class Window(QMainWindow):
      if on:self.skills.enable(sid,True,max_enabled=limit)
     d.accept()
    except Exception as e:self.error(e)
-  l.addWidget(btn('Importar carpeta de habilidad',import_));l.addWidget(btn('Guardar selecciÃ³n',save));refresh();d.exec()
+  l.addWidget(btn('Importar carpeta de habilidad',import_));l.addWidget(btn('Guardar selección',save));refresh();d.exec()
  def terminal(self,shell='powershell',command=''):
   if isinstance(shell,bool) or not shell:shell='powershell'
   from agente_ia.native_terminal import AuraTerminalPanel
   if getattr(self,'terminal_panel',None) is None:
    self.terminal_panel=AuraTerminalPanel(self,ROOT)
    self.terminal_panel.send_to_chat_requested.connect(self._receive_terminal_output)
-   self.terminal_dock=QDockWidget('Terminal Â· AURA (PowerShell / CMD / Python)',self)
+   self.terminal_dock=QDockWidget('Terminal · AURA (PowerShell / CMD / Python)',self)
    self.terminal_dock.setWidget(self.terminal_panel)
    self.terminal_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea|Qt.DockWidgetArea.BottomDockWidgetArea)
    self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.terminal_dock)
@@ -635,40 +683,40 @@ class Window(QMainWindow):
   if self.guarded():return
   d,l=self.dialog('Cambios y deshacer');listing=QListWidget();l.addWidget(listing);preview=QPlainTextEdit();preview.setReadOnly(True);l.addWidget(preview)
   for r in self.store.list_changes(limit=100):
-   item=QListWidgetItem(r['file_path']+' Â· '+r['status']);item.setData(Qt.ItemDataRole.UserRole,r);listing.addItem(item)
+   item=QListWidgetItem(r['file_path']+' · '+r['status']);item.setData(Qt.ItemDataRole.UserRole,r);listing.addItem(item)
   listing.itemClicked.connect(lambda item:preview.setPlainText(item.data(Qt.ItemDataRole.UserRole)['unified_diff']))
   def undo():
    item=listing.currentItem()
    if not item:return
-   if QMessageBox.question(d,'Deshacer cambio','Â¿Restaurar el contenido anterior de este archivo?')!=QMessageBox.StandardButton.Yes:return
+   if QMessageBox.question(d,'Deshacer cambio','¿Restaurar el contenido anterior de este archivo?')!=QMessageBox.StandardButton.Yes:return
    try:self.engine.revert_change(item.data(Qt.ItemDataRole.UserRole)['id']);d.accept()
    except Exception as e:self.error(e)
   l.addWidget(btn('Deshacer cambio seleccionado',undo));d.exec()
  def toggle_dictation(self):
-  if self.dictating:self.dictation.stop();self.mic.setToolTip('Transcribiendoâ€¦');return
-  if self.busy or self.warming:self.error('Espera la preparaciÃ³n o detÃ©n la respuesta antes de dictar.');return
-  self.player.stop();self.dictating=True;self.mic.setToolTip('â–  Terminar dictado');self.status.setText('Escuchando Â· mÃ¡ximo 60 segundos Â· pulsa Terminar dictado')
+  if self.dictating:self.dictation.stop();self.mic.setToolTip('Transcribiendo…');return
+  if self.busy or self.warming:self.error('Espera la preparación o detén la respuesta antes de dictar.');return
+  self.player.stop();self.dictating=True;self.mic.setToolTip('■ Terminar dictado');self.status.setText('Escuchando · máximo 60 segundos · pulsa Terminar dictado')
   def work():
    try:self.bus.event.emit('dictated',self.dictation.listen(self.prefs.get('microphone')))
-   except Exception as e:self.bus.event.emit('dictated','');self.bus.event.emit('notice','No se pudo usar el micrÃ³fono: '+str(e))
+   except Exception as e:self.bus.event.emit('dictated','');self.bus.event.emit('notice','No se pudo usar el micrófono: '+str(e))
   threading.Thread(target=work,daemon=True).start()
  def toggle_live_conversation(self,enable=None):
   target=(not self.live_conversation) if enable is None else bool(enable)
   if not target:
    self.live_conversation=False;self.dictation.stop();self.player.stop();self.dictating=False
-   self.status.setText('ConversaciÃ³n de voz en vivo detenida.');return
+   self.status.setText('Conversación de voz en vivo detenida.');return
   if self.busy or self.warming:self.error('Espera a que termine la tarea actual antes de conversar en vivo.');return
   self.live_conversation=True;self.auto_voice.setChecked(True)
   self.showNormal();self.raise_();self.activateWindow()
-  self.status.setText('ðŸŽ™ï¸ ConversaciÃ³n en vivo activa Â· habla ahora (di Â«detÃ©n conversaciÃ³nÂ» para salir)')
+  self.status.setText('🎙️ Conversación en vivo activa · habla ahora (di «detén conversación» para salir)')
   self._listen_live_turn()
  def _listen_live_turn(self):
   if not self.live_conversation or self.busy or self.warming or self.dictating:return
-  self.player.stop();self.dictating=True;self.mic.setToolTip('ðŸŽ™ï¸ ConversaciÃ³n en vivo Â· escuchandoâ€¦')
-  self.status.setText('ðŸŽ™ï¸ Escuchando tu vozâ€¦ (pausa 1.5 s al terminar de hablar)')
+  self.player.stop();self.dictating=True;self.mic.setToolTip('🎙️ Conversación en vivo · escuchando…')
+  self.status.setText('🎙️ Escuchando tu voz… (pausa 1.5 s al terminar de hablar)')
   def work():
    try:self.bus.event.emit('live_heard',self.dictation.listen_turn(self.prefs.get('microphone')))
-   except Exception as e:self.live_conversation=False;self.bus.event.emit('dictated','');self.bus.event.emit('notice','MicrÃ³fono no disponible en modo conversaciÃ³n: '+str(e))
+   except Exception as e:self.live_conversation=False;self.bus.event.emit('dictated','');self.bus.event.emit('notice','Micrófono no disponible en modo conversación: '+str(e))
   threading.Thread(target=work,daemon=True).start()
  def _on_voice_playback_changed(self,state):
   if state==QMediaPlayer.PlaybackState.StoppedState and self.live_conversation and not self.busy and not self.dictating:
@@ -688,7 +736,7 @@ class Window(QMainWindow):
       target=folder/('elevenlabs-'+str(time.time_ns())+'.mp3');synthesize(text,self.prefs.get('voice_id',''),self.voice_key.get(),target)
       if generation==self.voice_generation:self.bus.event.emit('voice_ready',target)
       source.unlink(missing_ok=True);return
-     except Exception:self.bus.event.emit('voice_fallback','ElevenLabs no disponible. Probando voz neural naturalâ€¦')
+     except Exception:self.bus.event.emit('voice_fallback','ElevenLabs no disponible. Probando voz neural natural…')
     if vmode in ('neural','elevenlabs'):
      try:
       from agente_ia.native_voice import pick_persona_neural_voice,synthesize_neural
@@ -702,7 +750,7 @@ class Window(QMainWindow):
       if generation==self.voice_generation:self.bus.event.emit('voice_ready',target)
       source.unlink(missing_ok=True);return
      except Exception:
-      self.bus.event.emit('voice_fallback','Sin conexiÃ³n para voz neural. Usando voz local 24 kHz de respaldo.')
+      self.bus.event.emit('voice_fallback','Sin conexión para voz neural. Usando voz local 24 kHz de respaldo.')
     if generation!=self.voice_generation:return
     args=['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(ASSETS/'voz-local.ps1'),'-TextFile',str(source),'-OutputFile',str(wav),'-VoiceName',self.prefs.get('voice',''),'-Rate',str(self.prefs.get('rate',0)),'-Volume',str(self.prefs.get('volume',90))]
     p=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));self.voice_process=p;out,err=p.communicate(timeout=120)
@@ -717,19 +765,19 @@ class Window(QMainWindow):
   threading.Thread(target=work,daemon=True).start()
  def voice_settings(self):
   from agente_ia.native_voice import NEURAL_VOICES
-  d,l=self.dialog('Voz natural Â· ConversaciÃ³n en vivo y respaldo offline');note=QLabel('Voz neural natural (Dalia para AURA/AURAX y Jorge para MATEO/ANGEL) suena cÃ¡lida y humana sin clave API; si no hay Internet cae automÃ¡ticamente a voz local de 24 kHz con pausas naturales. El dictado y la IA siempre corren en tu PC.');note.setWordWrap(True);l.addWidget(note);form=QFormLayout()
-  mode=QComboBox();mode.addItem('Voz neural natural Â· Dalia / Jorge (recomendada, sin clave)','neural');mode.addItem('ElevenLabs con respaldo neural/local','elevenlabs');mode.addItem('Solo voz local 100 % offline (24 kHz SSML)','local')
+  d,l=self.dialog('Voz natural · Conversación en vivo y respaldo offline');note=QLabel('Voz neural natural (Dalia para AURA/AURAX y Jorge para MATEO/ANGEL) suena cálida y humana sin clave API; si no hay Internet cae automáticamente a voz local de 24 kHz con pausas naturales. El dictado y la IA siempre corren en tu PC.');note.setWordWrap(True);l.addWidget(note);form=QFormLayout()
+  mode=QComboBox();mode.addItem('Voz neural natural · Dalia / Jorge (recomendada, sin clave)','neural');mode.addItem('ElevenLabs con respaldo neural/local','elevenlabs');mode.addItem('Solo voz local 100 % offline (24 kHz SSML)','local')
   cur_mode=self.prefs.get('voice_mode') or 'neural';mode.setCurrentIndex(max(0,mode.findData(cur_mode)));form.addRow('Modo de voz',mode)
   nbox=QComboBox()
   for vid,vlabel in NEURAL_VOICES:nbox.addItem(vlabel,vid)
   nbox.setCurrentIndex(max(0,nbox.findData(self.prefs.get('neural_voice','auto'))));form.addRow('Voz neural',nbox)
   key=QLineEdit();key.setEchoMode(QLineEdit.EchoMode.Password);key.setPlaceholderText('Clave guardada y protegida' if self.voice_key.path.exists() else 'Opcional: API key de ElevenLabs');form.addRow('Clave ElevenLabs',key)
-  voiceid=QLineEdit(self.prefs.get('voice_id',''));form.addRow('Identificador de Kate',voiceid);catalog=QComboBox();catalog.addItem('Buscar Kate en mi cuentaâ€¦','');form.addRow('Voces disponibles',catalog);catalog.currentIndexChanged.connect(lambda:voiceid.setText(catalog.currentData() or voiceid.text()));querybus=Bus(d)
+  voiceid=QLineEdit(self.prefs.get('voice_id',''));form.addRow('Identificador de Kate',voiceid);catalog=QComboBox();catalog.addItem('Buscar Kate en mi cuenta…','');form.addRow('Voces disponibles',catalog);catalog.currentIndexChanged.connect(lambda:voiceid.setText(catalog.currentData() or voiceid.text()));querybus=Bus(d)
   def receive(kind,data):
    if kind=='voices':
     catalog.clear()
     for x in data:catalog.addItem(x.get('name','Voz'),x.get('voice_id',''))
-    if not data:self.error('No se encontrÃ³ Kate en tu cuenta. AgrÃ©gala en ElevenLabs o introduce su identificador.')
+    if not data:self.error('No se encontró Kate en tu cuenta. Agrégala en ElevenLabs o introduce su identificador.')
    else:self.error(data)
   querybus.event.connect(receive)
   def find():
@@ -739,18 +787,18 @@ class Window(QMainWindow):
     except Exception as e:querybus.event.emit('error','No se pudo consultar ElevenLabs: '+str(e))
    threading.Thread(target=work,daemon=True).start()
   l.addLayout(form);l.addWidget(btn('Consultar cuenta ElevenLabs (opcional)',find))
-  voice=QLineEdit(self.prefs.get('voice',''));voice.setPlaceholderText('AutomÃ¡tica Â· espaÃ±ol Windows');rate=QSpinBox();rate.setRange(-10,10);rate.setValue(self.prefs.get('rate',0));volume=QSpinBox();volume.setRange(0,100);volume.setValue(self.prefs.get('volume',90));local=QFormLayout();local.addRow('Voz Windows de respaldo',voice);local.addRow('Velocidad',rate);local.addRow('Volumen',volume);mic=QComboBox();mic.addItem('MicrÃ³fono predeterminado',None)
+  voice=QLineEdit(self.prefs.get('voice',''));voice.setPlaceholderText('Automática · español Windows');rate=QSpinBox();rate.setRange(-10,10);rate.setValue(self.prefs.get('rate',0));volume=QSpinBox();volume.setRange(0,100);volume.setValue(self.prefs.get('volume',90));local=QFormLayout();local.addRow('Voz Windows de respaldo',voice);local.addRow('Velocidad',rate);local.addRow('Volumen',volume);mic=QComboBox();mic.addItem('Micrófono predeterminado',None)
   try:
    import sounddevice as sd
    for i,x in enumerate(sd.query_devices()):
     if x['max_input_channels']>0:mic.addItem(x['name'],i)
   except Exception:pass
-  index=mic.findData(self.prefs.get('microphone'));mic.setCurrentIndex(max(0,index));local.addRow('MicrÃ³fono',mic);l.addLayout(local)
+  index=mic.findData(self.prefs.get('microphone'));mic.setCurrentIndex(max(0,index));local.addRow('Micrófono',mic);l.addLayout(local)
   def test_now():
    self.save_pref('voice_mode',mode.currentData());self.save_pref('neural_voice',nbox.currentData());self.save_pref('rate',rate.value());self.audio.setVolume(volume.value()/100)
-   self.speak('Hola, soy Mateo y Aura listos para conversar contigo con una voz mÃ¡s clara y natural.')
+   self.speak('Hola, soy Mateo y Aura listos para conversar contigo con una voz más clara y natural.')
   l.addWidget(btn('Probar voz natural ahora',test_now))
-  l.addWidget(btn('ðŸŽ™ï¸ Iniciar / detener conversaciÃ³n en vivo (manos libres)',lambda:(d.accept(),self.toggle_live_conversation())))
+  l.addWidget(btn('🎙️ Iniciar / detener conversación en vivo (manos libres)',lambda:(d.accept(),self.toggle_live_conversation())))
   l.addWidget(btn('Pausar / continuar audio',lambda:self.player.pause() if self.player.playbackState()==QMediaPlayer.PlaybackState.PlayingState else self.player.play()))
   def save():
    try:
@@ -760,12 +808,12 @@ class Window(QMainWindow):
     for k,v in [('voice',voice.text()),('rate',rate.value()),('volume',volume.value()),('microphone',mic.currentData()),('voice_mode',chosen_mode),('neural_voice',nbox.currentData()),('voice_id',voiceid.text().strip())]:self.save_pref(k,v)
     self.audio.setVolume(volume.value()/100);d.accept()
    except Exception as e:self.error(e)
-  l.addWidget(btn('Guardar configuraciÃ³n de voz',save));l.addWidget(btn('Eliminar clave ElevenLabs',lambda:(self.voice_key.delete(),key.clear(),mode.setCurrentIndex(0),self.save_pref('voice_mode','neural'))));d.exec()
+  l.addWidget(btn('Guardar configuración de voz',save));l.addWidget(btn('Eliminar clave ElevenLabs',lambda:(self.voice_key.delete(),key.clear(),mode.setCurrentIndex(0),self.save_pref('voice_mode','neural'))));d.exec()
  def closeEvent(self,event):
   panel=getattr(self,'sql_panel',None)
-  if panel is not None and panel.job is not None:QMessageBox.information(self,'Base de datos','Espera a que termine la operaciÃ³n SQL antes de cerrar AURA.');event.ignore();return
-  if self.aurax is not None and any(self.aurax.tabs.widget(i).document().isModified() for i in range(self.aurax.tabs.count())) and QMessageBox.question(self,'AURAX','Hay cambios sin guardar en el editor. Â¿Cerrar y descartarlos?')!=QMessageBox.StandardButton.Yes:event.ignore();return
-  if (self.busy or self.warming) and QMessageBox.question(self,'Cerrar AURA','Se detendrÃ¡ la tarea en curso. Â¿Cerrar?')!=QMessageBox.StandardButton.Yes:event.ignore();return
+  if panel is not None and panel.job is not None:QMessageBox.information(self,'Base de datos','Espera a que termine la operación SQL antes de cerrar AURA.');event.ignore();return
+  if self.aurax is not None and any(self.aurax.tabs.widget(i).document().isModified() for i in range(self.aurax.tabs.count())) and QMessageBox.question(self,'AURAX','Hay cambios sin guardar en el editor. ¿Cerrar y descartarlos?')!=QMessageBox.StandardButton.Yes:event.ignore();return
+  if (self.busy or self.warming) and QMessageBox.question(self,'Cerrar AURA','Se detendrá la tarea en curso. ¿Cerrar?')!=QMessageBox.StandardButton.Yes:event.ignore();return
   if self.aurax is not None:self.aurax.stop_process()
   self.stop();self.floating.close();
   if hasattr(self.client,'close'):self.client.close()

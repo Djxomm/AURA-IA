@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from PySide6.QtCore import Qt, QTimer, QPoint, QRect
+from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QRectF
 from PySide6.QtGui import QPixmap, QPainter, QColor, QRegion, QFont, QPen, QKeySequence, QShortcut
+from .avatar_3d import paint_avatar_3d, persona_meta, render_avatar_pixmap, resolve_avatar_persona
 from PySide6.QtWidgets import (
     QWidget,
     QApplication,
@@ -39,14 +40,14 @@ class AuraxInstructionBubble(QWidget):
         card = QFrame()
         card.setObjectName("auraxBubbleCard")
         card.setStyleSheet(
-            "QFrame#auraxBubbleCard{background:#0b182b;border:2px solid #38bdf8;border-radius:16px;}"
-            "QLabel{color:#f1f5f9;background:transparent;}"
-            "QPlainTextEdit{background:#122540;color:#f8fafc;border:1px solid #2b4c73;border-radius:10px;padding:8px;font-size:13px;}"
+            "QFrame#auraxBubbleCard{background:#090d16;border:1px solid #38bdf8;border-radius:14px;}"
+            "QLabel{color:#f8fafc;background:transparent;}"
+            "QPlainTextEdit{background:#0f1626;color:#f8fafc;border:1px solid #26354d;border-radius:10px;padding:8px;font-size:13px;}"
             "QCheckBox{color:#cbd5e1;background:transparent;font-size:11px;}"
-            "QPushButton{background:#0284c7;color:#ffffff;border:none;border-radius:8px;padding:7px 14px;font-weight:600;}"
+            "QPushButton{background:#0284c7;color:#ffffff;border:1px solid #38bdf8;border-radius:8px;padding:7px 14px;font-weight:600;}"
             "QPushButton:hover{background:#0ea5e9;}"
-            "QPushButton#secondaryBtn{background:#1e293b;color:#e2e8f0;}"
-            "QPushButton#secondaryBtn:hover{background:#334155;}"
+            "QPushButton#secondaryBtn{background:#121926;color:#e2e8f0;border:1px solid #243247;}"
+            "QPushButton#secondaryBtn:hover{background:#1b2638;border-color:#38bdf8;}"
         )
         outer.addWidget(card)
 
@@ -189,26 +190,22 @@ class FloatingCompanion(QWidget):
         self.moved = False
         self.active = False
         self.phase = 0
+        self._anim_t = 0.0
+        self.avatar_state = "idle"
+        self.persona = resolve_avatar_persona(getattr(getattr(owner, "client", None), "model", None))
         self.attention = ""
         self.bubble_rect = QRect(4, 4, 42, 32)
         self.bubble = AuraxInstructionBubble(self)
-        self.setWindowTitle("AURAX · Asistente")
-        self.setAccessibleName("Asistente flotante AURAX")
-        self.setFixedSize(148, 170)
+        self.setWindowTitle("AURA · Asistente 3D")
+        self.setAccessibleName("Asistente flotante 3D AURA")
+        self.setFixedSize(152, 174)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        source = QPixmap(str(Path(__file__).parent / "static/assets/aurax-companion.png"))
-        if source.isNull():
-            source = QPixmap(str(Path(__file__).parent / "static/assets/aura-icono-transparente.png"))
-        if not source.isNull():
-            bounds = QRegion(source.mask()).boundingRect()
-            if not bounds.isEmpty():
-                source = source.copy(bounds)
-        self.sprite = source.scaled(120, 140, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        self.sprite = render_avatar_pixmap(self.persona, "idle", 0.0, 128, 140)
         self.timer = QTimer(self)
-        self.timer.setInterval(350)
+        self.timer.setInterval(85)
         self.timer.timeout.connect(self.animate)
-        self.update_state(False, "Listo. Clic en 💬 para escribir en el globo; clic en AURAX para abrir.")
+        self.update_state(False, "Listo. Clic en 💬 para escribir en el globo; clic en el avatar para abrir.")
         area = QApplication.primaryScreen().availableGeometry()
         position = owner.prefs.get("floating_position")
         if isinstance(position, list) and len(position) == 2 and all(isinstance(v, int) for v in position):
@@ -216,6 +213,17 @@ class FloatingCompanion(QWidget):
         else:
             self.move(area.right() - self.width() - 24, area.bottom() - self.height() - 24)
         self.clamp_position()
+
+    def set_model_persona(self, model_ref) -> None:
+        new_persona = resolve_avatar_persona(model_ref)
+        if new_persona != self.persona:
+            self.persona = new_persona
+            self.sprite = render_avatar_pixmap(self.persona, self.avatar_state, self._anim_t, 128, 140)
+            self.update()
+
+    def set_avatar_state(self, state: str) -> None:
+        self.avatar_state = state or "idle"
+        self.update()
 
     def clamp_position(self):
         screen = QApplication.screenAt(self.frameGeometry().center()) or QApplication.primaryScreen()
@@ -226,43 +234,52 @@ class FloatingCompanion(QWidget):
         )
 
     def animate(self):
-        self.phase = (self.phase + 1) % 6
+        self.phase = (self.phase + 1) % 60
+        self._anim_t += 0.14
         self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        bob = 2 if self.active and self.phase % 2 else 0
-        painter.drawPixmap((self.width() - self.sprite.width()) // 2, 12 + bob, self.sprite)
+        meta = persona_meta(self.persona)
+        state = self.avatar_state if self.active else "idle"
+        paint_avatar_3d(painter, QRectF(8, 12, self.width() - 16, self.height() - 28), self.persona, state, self._anim_t)
 
-        # Globo clickeable de instrucciones directas al chat (arriba a la izquierda de AURAX)
+        # Globo clickeable de instrucciones directas al chat (arriba a la izquierda)
         r = self.bubble_rect
-        painter.setPen(QPen(QColor("#38bdf8"), 2))
-        painter.setBrush(QColor("#0d223c"))
-        painter.drawRoundedRect(r, 12, 12)
+        painter.setPen(QPen(QColor(meta.accent), 1.6))
+        painter.setBrush(QColor("#0a0f1a"))
+        painter.drawRoundedRect(r, 11, 11)
         painter.setPen(QColor("#f8fafc"))
-        painter.setFont(QFont("Segoe UI Emoji", 12, QFont.Weight.Bold))
+        painter.setFont(QFont("Segoe UI Emoji", 11, QFont.Weight.Bold))
         painter.drawText(r, Qt.AlignmentFlag.AlignCenter, "💬")
 
         if self.attention:
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor("#ffc46b"))
-            painter.drawEllipse(118, 8, 20, 20)
-            painter.setPen(QColor("#10213b"))
+            painter.setBrush(QColor("#f59e0b"))
+            painter.drawEllipse(122, 8, 20, 20)
+            painter.setPen(QColor("#090d16"))
             painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-            painter.drawText(118, 8, 20, 20, Qt.AlignmentFlag.AlignCenter, "!")
+            painter.drawText(122, 8, 20, 20, Qt.AlignmentFlag.AlignCenter, "!")
         elif self.active:
             painter.setPen(Qt.PenStyle.NoPen)
             for index in range(3):
-                painter.setBrush(QColor("#63e4ef" if self.phase % 3 == index else "#315474"))
-                painter.drawEllipse(56 + index * 12, 158, 6, 6)
+                painter.setBrush(QColor(meta.accent if (self.phase // 3) % 3 == index else "#243247"))
+                painter.drawEllipse(58 + index * 12, 160, 6, 6)
         painter.end()
 
-    def update_state(self, active, text):
+    def update_state(self, active, text, *, avatar_state: str = ""):
         changed = self.active != bool(active)
         self.active = bool(active)
+        if avatar_state:
+            self.avatar_state = avatar_state
+        elif not self.active:
+            self.avatar_state = "idle"
+        elif self.avatar_state == "idle":
+            self.avatar_state = "thinking"
+        meta = persona_meta(self.persona)
         self.setToolTip(
-            "AURAX · " + (self.attention or text) + "\nClic en 💬: globo al chat · Clic en AURAX: abrir · Clic derecho: opciones"
+            f"AURA · {meta.title} · " + (self.attention or text) + "\nClic en 💬: globo al chat · Clic en el avatar: abrir · Clic derecho: opciones"
         )
         if self.active and self.isVisible() and self.owner.prefs.get("animations", True):
             if not self.timer.isActive():

@@ -210,6 +210,7 @@ def build_launch_command(
     prompt: str = "",
     *,
     use_ollama: bool = False,
+    aura_endpoint: dict[str, Any] | None = None,
 ) -> tuple[list[str], str]:
     """Construye la invocación segura de terminal externa dentro de `workspace_path`."""
     ws = Path(workspace_path).resolve()
@@ -230,8 +231,28 @@ def build_launch_command(
 
     oll = find_executable(("ollama", "ollama.exe"))
     exe = find_executable(spec.executables)
+    env_prefix = ""
 
-    if use_ollama and spec.ollama_launch_name and oll:
+    if aura_endpoint and exe and spec.id in {"codex", "opencode"}:
+        from .local_openai_bridge import sync_codex_aura_profile, sync_opencode_aura_config
+
+        base_url = str(aura_endpoint.get("base_url") or "").strip()
+        model_id = str(aura_endpoint.get("model_id") or "aura-local").strip()
+        model_disp = str(aura_endpoint.get("model_label") or model_id)
+        clean_prompt = str(prompt or "").strip()
+        if spec.id == "codex":
+            sync_codex_aura_profile(base_url, model_id)
+            env_prefix = "$env:AURA_LOCAL_API_KEY='aura-local'; "
+            inner = f"& {_ps_quote(exe)} -p aura -C {_ps_quote(str(ws))}"
+            if clean_prompt:
+                inner += f" {_ps_quote(clean_prompt)}"
+        else:
+            sync_opencode_aura_config(ws, base_url, model_id, model_disp)
+            env_prefix = f"$env:OPENAI_BASE_URL={_ps_quote(base_url)}; $env:OPENAI_API_KEY='aura-local'; "
+            inner = f"& {_ps_quote(exe)}"
+            if clean_prompt:
+                inner += f" {_ps_quote(clean_prompt)}"
+    elif use_ollama and spec.ollama_launch_name and oll:
         inner = f"& {_ps_quote(oll)} launch {spec.ollama_launch_name}"
     elif exe:
         clean_prompt = str(prompt or "").strip()
@@ -246,7 +267,7 @@ def build_launch_command(
             f"{spec.name} no está instalado en este equipo.\nInstálalo con: {spec.install_hint}"
         )
 
-    script = f"Set-Location -LiteralPath {_ps_quote(str(ws))}; {inner}"
+    script = f"Set-Location -LiteralPath {_ps_quote(str(ws))}; {env_prefix}{inner}"
     return [ps_exe, "-NoExit", "-Command", script], script
 
 
@@ -256,15 +277,22 @@ def launch_external_agent(
     prompt: str = "",
     *,
     use_ollama: bool = False,
+    aura_endpoint: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    argv, display = build_launch_command(agent_id, workspace_path, prompt=prompt, use_ollama=use_ollama)
+    argv, display = build_launch_command(
+        agent_id,
+        workspace_path,
+        prompt=prompt,
+        use_ollama=use_ollama,
+        aura_endpoint=aura_endpoint,
+    )
     flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
     proc = subprocess.Popen(argv, cwd=str(Path(workspace_path).resolve()), creationflags=flags)
     return {"ok": True, "agent_id": agent_id, "pid": proc.pid, "command": display}
 
 
 def open_external_agents_dialog(parent, workspace_path: str | Path, initial_prompt: str = "") -> None:
-    """Abre un selector visual estilo Apps (Claude Code, Codex CLI, OpenCode, Qwen Code, Copilot, Ollama...)."""
+    """Abre un selector visual de Agentes CLI conectados a los modelos locales de AURA IA."""
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import (
         QCheckBox,
@@ -281,26 +309,34 @@ def open_external_agents_dialog(parent, workspace_path: str | Path, initial_prom
     )
 
     dlg = QDialog(parent)
-    dlg.setWindowTitle("AURA · Apps y Agentes CLI en el proyecto")
-    dlg.resize(760, 560)
+    dlg.setWindowTitle("AURA · Agentes CLI en el workspace (Modelos AURA IA)")
+    dlg.resize(780, 580)
     dlg.setStyleSheet(
-        "QDialog{background:#0b1626;color:#ecf5ff;}"
-        "QWidget#agentCard{background:#12233a;border:1px solid #2b486b;border-radius:12px;}"
-        "QWidget#agentCard:hover{border-color:#53c9f5;}"
-        "QPushButton{background:#1d4ed8;color:#ffffff;border:none;border-radius:8px;padding:7px 14px;font-weight:600;}"
-        "QPushButton:hover{background:#2563eb;}"
-        "QPushButton:disabled{background:#1f2e42;color:#7d93ad;}"
-        "QLineEdit{background:#0f1d31;color:#f1f5f9;border:1px solid #305075;border-radius:8px;padding:8px;}"
+        "QDialog{background:#070a10;color:#f1f5f9;}"
+        "QWidget#agentCard{background:#0d1320;border:1px solid #1f2b40;border-radius:12px;}"
+        "QWidget#agentCard:hover{border-color:#38bdf8;}"
+        "QPushButton{background:#0284c7;color:#ffffff;border:1px solid #38bdf8;border-radius:8px;padding:7px 14px;font-weight:600;}"
+        "QPushButton:hover{background:#0ea5e9;}"
+        "QPushButton:disabled{background:#141c2b;color:#64748b;border-color:#1e293b;}"
+        "QLineEdit{background:#0b101b;color:#f8fafc;border:1px solid #26354d;border-radius:8px;padding:8px;}"
+        "QLineEdit:focus{border-color:#38bdf8;}"
     )
     root_layout = QVBoxLayout(dlg)
-    head = QLabel("Apps y Agentes CLI (estilo Codex / Claude Code / Ollama Apps)")
-    head.setStyleSheet("font-size:18px;font-weight:700;color:#f8fafc;")
+    head = QLabel("Agentes CLI del Workspace · Modelos locales AURA IA")
+    head.setStyleSheet("font-size:17px;font-weight:700;color:#f8fafc;")
     root_layout.addWidget(head)
 
     ws_label = QLabel(f"Proyecto activo: {Path(workspace_path).resolve()}")
     ws_label.setWordWrap(True)
-    ws_label.setStyleSheet("color:#93c5fd;")
+    ws_label.setStyleSheet("color:#7dd3fc;")
     root_layout.addWidget(ws_label)
+
+    has_aura_client = hasattr(parent, "client") and hasattr(parent, "store")
+    aura_chk = QCheckBox("Conectar Codex CLI y OpenCode al modelo local activo de AURA IA (100 % offline, sin API externa)")
+    aura_chk.setEnabled(has_aura_client)
+    aura_chk.setChecked(has_aura_client)
+    aura_chk.setStyleSheet("color:#67e8f9;font-weight:600;")
+    root_layout.addWidget(aura_chk)
 
     oll = ollama_status()
     oll_chk = QCheckBox(
@@ -351,14 +387,31 @@ def open_external_agents_dialog(parent, workspace_path: str | Path, initial_prom
             hint.setStyleSheet("color:#94a3b8;font-size:11px;font-family:Consolas;")
             cl.addWidget(hint)
 
-        btn = QPushButton("Abrir en proyecto" if (ag["installed"] or ag["can_launch_via_ollama"]) else "No instalado")
+        btn_label = (
+            "Abrir con modelo AURA IA"
+            if ag["id"] in {"codex", "opencode"} and ag["installed"] and has_aura_client
+            else ("Abrir en proyecto" if (ag["installed"] or ag["can_launch_via_ollama"]) else "No instalado")
+        )
+        btn = QPushButton(btn_label)
         btn.setEnabled(bool(ag["installed"] or ag["can_launch_via_ollama"]))
 
         def _fire(_checked=False, aid=ag["id"]):
             try:
-                res = launch_external_agent(aid, workspace_path, prompt=prompt_box.text().strip(), use_ollama=oll_chk.isChecked())
+                endpoint = None
+                if aid in {"codex", "opencode"} and aura_chk.isChecked() and has_aura_client and not oll_chk.isChecked():
+                    from .local_openai_bridge import ensure_aura_openai_endpoint
+
+                    endpoint = ensure_aura_openai_endpoint(parent.client, parent.store.get_settings())
+                res = launch_external_agent(
+                    aid,
+                    workspace_path,
+                    prompt=prompt_box.text().strip(),
+                    use_ollama=oll_chk.isChecked(),
+                    aura_endpoint=endpoint,
+                )
                 if hasattr(parent, "status"):
-                    parent.status.setText(f"Agente externo abierto: {aid} (PID {res['pid']})")
+                    extra = f" · modelo {endpoint['model_label']} ({endpoint['base_url']})" if endpoint else ""
+                    parent.status.setText(f"Agente CLI abierto: {aid} (PID {res['pid']}){extra}")
                 dlg.accept()
             except Exception as exc:
                 QMessageBox.warning(dlg, "AURA · Agente externo", str(exc))

@@ -4,9 +4,10 @@ from PySide6.QtCore import Qt,QByteArray
 from PySide6.QtGui import QIcon,QPixmap,QPainter
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QWidget,QSplitter,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QToolButton,QMenu,QLineEdit,QListWidget,QComboBox,QCheckBox,QTextBrowser,QPlainTextEdit,QSizePolicy
-from .chat_controls import ChatControls
+from .chat_controls import ChatControls, model_label
 from .message_input import MessageInput
 from .chat_view import ChatView
+from .avatar_3d import AvatarStageWidget
 
 PATHS={
  'plus':'<path d="M12 5v14M5 12h14"/>',
@@ -36,12 +37,17 @@ def build_shell(w,assets):
     more=tool(w,'dots','Más herramientas',lambda:None);menu=QMenu(more)
     for title,callback in [('Recursos y tareas',w.open_resources),('Archivos comprimidos',w.open_archives),('Bases de datos SQL',w.open_sql),('Explorador de Internet',w.open_browser),('Habilidades',w.skills_panel),('Terminal y compilación',w.terminal),('Cambios y deshacer',w.changes)]:menu.addAction(title,callback)
     more.setMenu(menu);more.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);r.addWidget(more);r.addStretch();r.addWidget(tool(w,'settings','Configuración',w.settings))
-    side=QWidget();side.setObjectName('sidebar');side.setMinimumWidth(170);side.setMaximumWidth(300);sl=QVBoxLayout(side);sl.setContentsMargins(12,17,12,12);sl.setSpacing(8)
-    brand=QLabel('AURA IA');brand.setObjectName('brand');sl.addWidget(brand);subtitle=QLabel('TU ESPACIO LOCAL');subtitle.setObjectName('sectionLabel');sl.addWidget(subtitle)
+    side=QWidget();side.setObjectName('sidebar');side.setMinimumWidth(170);side.setMaximumWidth(300);sl=QVBoxLayout(side);sl.setContentsMargins(12,14,12,12);sl.setSpacing(8)
+    brand=QLabel('AURA IA');brand.setObjectName('brand');sl.addWidget(brand)
+    w.avatar_stage=AvatarStageWidget(side,compact=True);w.avatar_stage.set_animations_enabled(bool(w.prefs.get('animations',True)))
+    w.avatar_stage.set_model(getattr(getattr(w,'client',None),'model',None),model_label(getattr(getattr(w,'client',None),'model',None)))
+    w.avatar_stage.clicked.connect(lambda:w.floating.show() if hasattr(w,'floating') else None)
+    sl.addWidget(w.avatar_stage)
     new=QPushButton('Nuevo chat');new.setObjectName('newChatButton');new.setIcon(icon('plus'));new.clicked.connect(w.new_chat);sl.addWidget(new)
-    label=QLabel('PROYECTOS');label.setObjectName('sectionLabel');sl.addWidget(label)
+    label=QLabel('WORKSPACE Y AGENTES');label.setObjectName('sectionLabel');sl.addWidget(label)
     project=QPushButton((Path(w.store.get_settings().workspace_path).name or 'Mi proyecto')[:20]);project.setObjectName('navButton');project.setIcon(icon('folder'));project.setToolTip(w.store.get_settings().workspace_path);project.clicked.connect(w.project);sl.addWidget(project)
-    coder=QPushButton('AURAX · Codificador');coder.setObjectName('navButton');coder.setIcon(icon('code'));coder.clicked.connect(w.open_aurax);sl.addWidget(coder)
+    coder=QPushButton('AURAX · QbitX');coder.setObjectName('navButton');coder.setIcon(icon('code'));coder.clicked.connect(w.open_aurax);sl.addWidget(coder)
+    codex_btn=QPushButton('Codex / OpenCode · AURA');codex_btn.setObjectName('navButton');codex_btn.setIcon(icon('terminal'));codex_btn.setToolTip('Abrir Codex CLI u OpenCode conectados a tu modelo local de AURA IA');codex_btn.clicked.connect(lambda:w.open_external_agents('') if hasattr(w,'open_external_agents') else w.terminal());sl.addWidget(codex_btn)
     w.search=QLineEdit();w.search.setPlaceholderText('Buscar conversación…');w.search.textChanged.connect(w.filter_history);sl.addWidget(w.search)
     recent=QLabel('RECIENTES');recent.setObjectName('sectionLabel');sl.addWidget(recent);w.history=QListWidget();w.history.itemClicked.connect(w.select_chat);sl.addWidget(w.history,1)
     local=QToolButton();local.setText('AURA · Local');local.setObjectName('localMenu');local.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon);local.setIcon(QIcon(str(assets/'aura.ico')));local.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);local_menu=QMenu(local)

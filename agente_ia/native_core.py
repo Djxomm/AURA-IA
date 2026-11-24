@@ -1,9 +1,27 @@
 """Native-only inference, explicit local memory and offline dictation."""
 from __future__ import annotations
-import asyncio, atexit, base64, codecs, hashlib, json, mimetypes, os, re, socket, sqlite3, subprocess, threading, time, urllib.error, urllib.request, uuid
+import asyncio, atexit, base64, codecs, hashlib, http.client, json, mimetypes, os, re, socket, sqlite3, subprocess, threading, time, urllib.error, urllib.request, uuid
 from pathlib import Path
 from .providers import ProviderResponse, ProviderError, ToolCall, _adapt_messages_for_xml
 from .tools import parse_xml_tool_calls
+
+
+class _RepetitionLoopError(Exception):
+ """Señal interna cuando el modelo local entra en un bucle repetitivo degenerado."""
+
+
+def _has_repetition_loop(text: str, *, min_unit: int = 16, max_unit: int = 180, repeats: int = 5) -> bool:
+ if len(text) < min_unit * repeats:
+  return False
+ tail = text[-(max_unit * repeats + 32):]
+ max_p = min(max_unit, len(tail) // repeats)
+ for p in range(min_unit, max_p + 1):
+  unit = tail[-p:]
+  if len(unit.strip()) < 10:
+   continue
+  if tail.endswith(unit * repeats):
+   return True
+ return False
 
 class Memory:
  def __init__(self,path):
@@ -76,6 +94,11 @@ class NativeClient:
    p.terminate()
   req=getattr(self,'_active_http',None)
   if req is not None:
+   try:
+    raw=getattr(getattr(req,'fp',None),'raw',None)
+    sock=getattr(raw,'_sock',None)
+    if sock is not None:sock.close()
+   except Exception:pass
    try:req.close()
    except Exception:pass
  def _ensure_server(self,engine,effective,settings,gpu_args,*,arch='',mmproj=None,mtp=None):
@@ -156,21 +179,27 @@ class NativeClient:
     parts.append({'type':'input_audio','input_audio':{'data':b64,'format':fmt}})
   out[target_idx]={'role':out[target_idx]['role'],'content':parts}
   return out
- def _generate_server_chat(self,messages,budget,settings,callback,engine,effective,gpu_args,mmproj,mtp,media_paths=()):
+ def _generate_server_chat(self,messages,budget,settings,callback,engine,effective,gpu_args,mmproj,mtp,media_paths=(),anti_repeat=False):
   start=time.monotonic()
   port=self._ensure_server(engine,effective,settings,gpu_args,arch='gemma4',mmproj=mmproj,mtp=mtp)
   mm_msgs=self._build_multimodal_messages(messages,media_paths)
   enable_thinking=str(getattr(settings,'thinking_effort','equilibrado')).lower() in ('profundo','maximo')
-  payload=json.dumps({
+  temp=max(0.25,float(settings.temperature)) if anti_repeat else float(settings.temperature)
+  body_obj={
    'model':self.model.stem,
    'messages':mm_msgs,
    'max_tokens':int(budget),
-   'temperature':float(settings.temperature),
+   'temperature':temp,
    'stream':True,
    'chat_template_kwargs':{'enable_thinking':enable_thinking},
-  }).encode('utf-8')
+  }
+  if anti_repeat:
+   body_obj['repeat_penalty']=1.15;body_obj['repeat_last_n']=128
+  elif temp>0.01:
+   body_obj['repeat_penalty']=1.08;body_obj['repeat_last_n']=64
+  payload=json.dumps(body_obj).encode('utf-8')
   req=urllib.request.Request(f'http://127.0.0.1:{port}/v1/chat/completions',data=payload,headers={'Content-Type':'application/json'},method='POST')
-  answer=''
+  answer='';last_loop_check=0
   try:
    resp=urllib.request.urlopen(req,timeout=300)
    self._active_http=resp
@@ -190,12 +219,20 @@ class NativeClient:
      if text:
       if self.first_text is None and text.strip():self.first_text=time.monotonic()-start
       answer+=text;callback(text)
+      if len(answer)-last_loop_check>=64:
+       last_loop_check=len(answer)
+       if _has_repetition_loop(answer):
+        raise _RepetitionLoopError('Bucle repetitivo detectado en servidor multimodal.')
      if choices[0].get('finish_reason'):break
    finally:
     self._active_http=None
     try:resp.close()
     except Exception:pass
-  except urllib.error.URLError as exc:
+  except _RepetitionLoopError:
+   if not anti_repeat and not self.cancelled.is_set():
+    return self._generate_server_chat(messages,budget,settings,callback,engine,effective,gpu_args,mmproj,mtp,media_paths=media_paths,anti_repeat=True)
+   raise ProviderError('Se detectó un bucle de repetición en el modelo local y se detuvo automáticamente. Prueba con Razonamiento · Equilibrado o reformula la tarea.')
+  except (urllib.error.URLError,http.client.HTTPException,AttributeError,OSError,ValueError) as exc:
    if self.cancelled.is_set():raise ProviderError('Respuesta detenida por el usuario.')
    self.close()
    raise ProviderError(f'Error de conexión con servidor multimodal local: {exc}') from exc
@@ -203,19 +240,25 @@ class NativeClient:
   answer=answer.replace('[end of text]','').strip()
   if not answer:raise ProviderError('El modelo no produjo texto.')
   return answer,time.monotonic()-start
- def _generate_server(self,prompt,budget,settings,use_cache,callback,engine,effective,gpu_args,harmony_filter,stop_tokens):
+ def _generate_server(self,prompt,budget,settings,use_cache,callback,engine,effective,gpu_args,harmony_filter,stop_tokens,anti_repeat=False):
   start=time.monotonic()
   port=self._ensure_server(engine,effective,settings,gpu_args)
-  payload=json.dumps({
+  temp=max(0.25,float(settings.temperature)) if anti_repeat else float(settings.temperature)
+  body_obj={
    'prompt':prompt,
    'n_predict':int(budget),
-   'temperature':float(settings.temperature),
+   'temperature':temp,
    'stream':True,
-   'cache_prompt':bool(use_cache),
+   'cache_prompt':bool(use_cache) and not anti_repeat,
    'stop':list(stop_tokens),
-  }).encode('utf-8')
+  }
+  if anti_repeat:
+   body_obj['repeat_penalty']=1.15;body_obj['repeat_last_n']=128
+  elif temp>0.01:
+   body_obj['repeat_penalty']=1.08;body_obj['repeat_last_n']=64
+  payload=json.dumps(body_obj).encode('utf-8')
   req=urllib.request.Request(f'http://127.0.0.1:{port}/completion',data=payload,headers={'Content-Type':'application/json'},method='POST')
-  answer=''
+  answer='';last_loop_check=0
   try:
    resp=urllib.request.urlopen(req,timeout=300)
    self._active_http=resp
@@ -233,12 +276,20 @@ class NativeClient:
      if text:
       if self.first_text is None and text.strip():self.first_text=time.monotonic()-start
       answer+=text;callback(text)
+      if len(answer)-last_loop_check>=64:
+       last_loop_check=len(answer)
+       if _has_repetition_loop(answer):
+        raise _RepetitionLoopError('Bucle repetitivo detectado en servidor local.')
      if chunk.get('stop'):break
    finally:
     self._active_http=None
     try:resp.close()
     except Exception:pass
-  except urllib.error.URLError as exc:
+  except _RepetitionLoopError:
+   if not anti_repeat and not self.cancelled.is_set():
+    return self._generate_server(prompt,budget,settings,use_cache,callback,engine,effective,gpu_args,harmony_filter,stop_tokens,anti_repeat=True)
+   raise ProviderError('Se detectó un bucle de repetición en el modelo local y se detuvo automáticamente. Prueba con Razonamiento · Equilibrado o reformula la tarea.')
+  except (urllib.error.URLError,http.client.HTTPException,AttributeError,OSError,ValueError) as exc:
    if self.cancelled.is_set():raise ProviderError('Respuesta detenida por el usuario.')
    self.close()
    raise ProviderError(f'Error de conexión con servidor local: {exc}') from exc

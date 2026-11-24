@@ -152,3 +152,49 @@ def test_zamara_multimodal_pairing_and_payload(tmp_path):
     parts = mm_msgs[0]["content"]
     assert isinstance(parts, list) and [p["type"] for p in parts] == ["text", "image_url", "input_audio"]
 
+
+def test_repetition_loop_detector_catches_degenerate_import_loop_without_false_positives():
+    from agente_ia.native_core import _has_repetition_loop
+
+    loop = (
+        'import math\nfrom panda3d.core import Vec3, Vec4, '
+        + "AmbientLight, DirectionalLight, PointLight, Vec2, Vec3, Vec4, " * 6
+    )
+    assert _has_repetition_loop(loop) is True
+
+    normal_code = "\n".join(f"def step_{i}(value):\n    return value + {i}" for i in range(12))
+    assert _has_repetition_loop(normal_code) is False
+    assert _has_repetition_loop("    \n" * 40) is False
+
+
+def test_server_stream_peek_attribute_error_reports_clean_cancel(tmp_path, monkeypatch):
+    import urllib.request
+    from agente_ia.config import AppSettings
+    from agente_ia.native_core import NativeClient
+    from agente_ia.providers import ProviderError
+
+    model = tmp_path / "dummy.gguf"
+    model.write_bytes(b"GGUF")
+    client = NativeClient(tmp_path, tmp_path / "data", model)
+    monkeypatch.setattr(client, "_ensure_server", lambda *a, **kw: 18080)
+
+    class _BrokenStream:
+        def __iter__(self):
+            return self
+        def __next__(self):
+            client.cancelled.set()
+            raise AttributeError("'NoneType' object has no attribute 'peek'")
+        def close(self):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=300: _BrokenStream())
+    try:
+        client._generate_server(
+            "hola", 64, AppSettings(temperature=0.0), True, lambda _: None,
+            tmp_path, 2048, [], None, ("<|im_end|>",),
+        )
+        assert False, "Debió lanzar ProviderError limpio"
+    except ProviderError as exc:
+        assert "detenida por el usuario" in str(exc).lower()
+
+

@@ -1,6 +1,6 @@
 """Native-only inference, explicit local memory and offline dictation."""
 from __future__ import annotations
-import asyncio, atexit, codecs, hashlib, json, os, re, socket, sqlite3, subprocess, threading, time, urllib.error, urllib.request, uuid
+import asyncio, atexit, base64, codecs, hashlib, json, mimetypes, os, re, socket, sqlite3, subprocess, threading, time, urllib.error, urllib.request, uuid
 from pathlib import Path
 from .providers import ProviderResponse, ProviderError, ToolCall, _adapt_messages_for_xml
 from .tools import parse_xml_tool_calls
@@ -78,8 +78,8 @@ class NativeClient:
   if req is not None:
    try:req.close()
    except Exception:pass
- def _ensure_server(self,engine,effective,settings,gpu_args):
-  sig=(str(engine.resolve()),str(self.model.resolve()),self.model.stat().st_mtime_ns,int(effective),tuple(gpu_args or ()),int(settings.num_thread))
+ def _ensure_server(self,engine,effective,settings,gpu_args,*,arch='',mmproj=None,mtp=None):
+  sig=(str(engine.resolve()),str(self.model.resolve()),self.model.stat().st_mtime_ns,int(effective),tuple(gpu_args or ()),int(settings.num_thread),arch,str(mmproj or ''),str(mtp or ''))
   if self._server_proc is not None and self._server_proc.poll() is None and self._server_sig==sig and self._server_port:
    return self._server_port
   self.close()
@@ -95,19 +95,28 @@ class NativeClient:
    '--cache-reuse','256','-sps','0.5','--no-webui','--no-warmup',
    '-np','1','-ngl','0','--host','127.0.0.1','--port',str(port),
   ]
+  if arch=='gemma4':
+   args.append('--jinja')
+  if mmproj is not None and Path(mmproj).is_file():
+   args+=['--mmproj',str(mmproj)]
+  if mtp is not None and Path(mtp).is_file():
+   args+=['--spec-type','draft-mtp','-md',str(mtp)]
   if gpu_args:
    args[args.index('-ngl')+1]=gpu_args[-1];args+=gpu_args[:2]
   self._server_log=(self.data/'motor-server.log').open('a',encoding='utf-8')
   flags=getattr(subprocess,'CREATE_NO_WINDOW',0)
   self._server_proc=subprocess.Popen(args,cwd=engine,stdin=subprocess.DEVNULL,stdout=self._server_log,stderr=self._server_log,creationflags=flags)
   self._server_port=port;self._server_sig=sig
-  deadline=time.monotonic()+45.0
+  deadline=time.monotonic()+60.0
   health_url=f'http://127.0.0.1:{port}/health'
   while time.monotonic()<deadline:
    if self.cancelled.is_set():
     self.close();raise ProviderError('Respuesta detenida por el usuario.')
    if self._server_proc.poll() is not None:
-    self.close();raise ProviderError('El servidor local de inferencia no pudo iniciar.')
+    self.close()
+    if mtp is not None:
+     return self._ensure_server(engine,effective,settings,gpu_args,arch=arch,mmproj=mmproj,mtp=None)
+    raise ProviderError('El servidor local de inferencia no pudo iniciar.')
    try:
     with urllib.request.urlopen(health_url,timeout=0.8) as resp:
      if resp.status==200:
@@ -115,6 +124,85 @@ class NativeClient:
    except Exception:
     time.sleep(0.15)
   self.close();raise ProviderError('Tiempo agotado al iniciar el servidor local de inferencia.')
+ def supports_native_multimodal(self):
+  try:
+   from .model_library import model_info,find_paired_multimodal_files
+   arch=str(model_info(self.model).get('general.architecture') or '')
+   return arch=='gemma4' and find_paired_multimodal_files(self.model).get('mmproj') is not None
+  except Exception:
+   return False
+ @staticmethod
+ def _build_multimodal_messages(messages,media_paths=()):
+  out=[]
+  for m in messages:
+   role=str(m.get('role') or 'user')
+   content=str(m.get('content') or '')
+   out.append({'role':role,'content':content})
+  paths=[Path(p) for p in (media_paths or ()) if Path(p).is_file()]
+  if not paths or not out:
+   return out
+  target_idx=next((i for i in range(len(out)-1,-1,-1) if out[i]['role']=='user'),len(out)-1)
+  parts=[{'type':'text','text':out[target_idx]['content']}]
+  for p in paths[:4]:
+   ext=p.suffix.lower()
+   raw=p.read_bytes()
+   if len(raw)>20*1024*1024:continue
+   b64=base64.b64encode(raw).decode('ascii')
+   if ext in {'.png','.jpg','.jpeg','.webp','.bmp','.gif'}:
+    mime=mimetypes.guess_type(p.name)[0] or 'image/png'
+    parts.append({'type':'image_url','image_url':{'url':f'data:{mime};base64,{b64}'}})
+   elif ext in {'.wav','.mp3'}:
+    fmt='mp3' if ext=='.mp3' else 'wav'
+    parts.append({'type':'input_audio','input_audio':{'data':b64,'format':fmt}})
+  out[target_idx]={'role':out[target_idx]['role'],'content':parts}
+  return out
+ def _generate_server_chat(self,messages,budget,settings,callback,engine,effective,gpu_args,mmproj,mtp,media_paths=()):
+  start=time.monotonic()
+  port=self._ensure_server(engine,effective,settings,gpu_args,arch='gemma4',mmproj=mmproj,mtp=mtp)
+  mm_msgs=self._build_multimodal_messages(messages,media_paths)
+  enable_thinking=str(getattr(settings,'thinking_effort','equilibrado')).lower() in ('profundo','maximo')
+  payload=json.dumps({
+   'model':self.model.stem,
+   'messages':mm_msgs,
+   'max_tokens':int(budget),
+   'temperature':float(settings.temperature),
+   'stream':True,
+   'chat_template_kwargs':{'enable_thinking':enable_thinking},
+  }).encode('utf-8')
+  req=urllib.request.Request(f'http://127.0.0.1:{port}/v1/chat/completions',data=payload,headers={'Content-Type':'application/json'},method='POST')
+  answer=''
+  try:
+   resp=urllib.request.urlopen(req,timeout=300)
+   self._active_http=resp
+   try:
+    for raw_line in resp:
+     if self.cancelled.is_set():raise ProviderError('Respuesta detenida por el usuario.')
+     line=raw_line.decode('utf-8','replace').strip()
+     if not line.startswith('data:'):continue
+     body=line[5:].strip()
+     if not body or body=='[DONE]':break
+     try:chunk=json.loads(body)
+     except ValueError:continue
+     choices=chunk.get('choices') or []
+     if not choices:continue
+     delta=choices[0].get('delta') or {}
+     text=str(delta.get('content') or '')
+     if text:
+      if self.first_text is None and text.strip():self.first_text=time.monotonic()-start
+      answer+=text;callback(text)
+     if choices[0].get('finish_reason'):break
+   finally:
+    self._active_http=None
+    try:resp.close()
+    except Exception:pass
+  except urllib.error.URLError as exc:
+   if self.cancelled.is_set():raise ProviderError('Respuesta detenida por el usuario.')
+   self.close()
+   raise ProviderError(f'Error de conexión con servidor multimodal local: {exc}') from exc
+  if self.cancelled.is_set():raise ProviderError('Respuesta detenida por el usuario.')
+  answer=answer.replace('[end of text]','').strip()
+  if not answer:raise ProviderError('El modelo no produjo texto.')
+  return answer,time.monotonic()-start
  def _generate_server(self,prompt,budget,settings,use_cache,callback,engine,effective,gpu_args,harmony_filter,stop_tokens):
   start=time.monotonic()
   port=self._ensure_server(engine,effective,settings,gpu_args)
@@ -208,6 +296,16 @@ class NativeClient:
   harmony_filter=HarmonyOutput() if harmony else None
   if self.use_persistent_server and (engine/'llama-server.exe').is_file() and not harmony:
    try:
+    if arch=='gemma4':
+     from .model_library import find_paired_multimodal_files
+     paired=find_paired_multimodal_files(self.model)
+     media_paths=list(getattr(self,'pending_media_paths',()) or ())
+     self.pending_media_paths=[]
+     res=self._generate_server_chat(messages,budget,settings,callback,engine,effective,gpu_args,paired.get('mmproj'),paired.get('mtp'),media_paths=media_paths)
+     tag=' · Zamara Multimodal nativo' + (' + MTP' if paired.get('mtp') else '')
+     if tag not in self.backend_note:
+      self.backend_note+=tag
+     return res
     res=self._generate_server(prompt,budget,settings,use_cache,callback,engine,effective,gpu_args,harmony_filter,stop_tokens)
     if 'servidor rápido' not in self.backend_note:
      self.backend_note+=' · servidor rápido KV-RAM'

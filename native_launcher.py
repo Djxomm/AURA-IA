@@ -262,6 +262,15 @@ class Window(QMainWindow):
     if rtype=='toggle_live_conversation':
      self.input.clear();arg=resolved.get('arg','').lower();target=True if arg in ('on','si','sÃ­','1','iniciar','activar') else False if arg in ('off','no','0','detener','salir') else None
      self.toggle_live_conversation(target);return
+    if rtype=='switch_zamara':
+     cand=next((p for p in self.list_available_models() if 'zamara' in p.name.lower() or 'gemma-4-e4b' in p.name.lower()),None)
+     if cand is None:
+      self.input.clear();self.status.setText('AURA - Zamara Multimodal aÃºn se estÃ¡ descargando o no estÃ¡ registrada en Modelos.');return
+     self.select_model(str(cand))
+     prompt_after=str(resolved.get('prompt') or '').strip()
+     if not prompt_after:
+      self.input.clear();self.status.setText('Modelo activo: AURA - Zamara Multimodal (Audio Â· Imagen Â· Video Â· 128K nativo)');return
+     text=prompt_after;resolved=None
     if rtype=='open_panel':
      self.input.clear();{'skills':self.skills_panel,'settings':self.settings,'changes':self.changes}[resolved['panel']]();return
     if rtype=='open_external_agents':
@@ -336,13 +345,20 @@ class Window(QMainWindow):
     from agente_ia.project_knowledge import context_for
     context+=context_for(text,project,self.prefs.get('knowledge_directories',['D:/IA/Memoria_Proyectos']),max_chars=min(2600,max(900,settings.num_ctx//2)))
     from agente_ia.image_evidence import IMAGE_SUFFIXES,analyze,reference
-    image_paths=[path for path in attachments if Path(path).suffix.lower() in IMAGE_SUFFIXES]
-    for image_path in image_paths:
-     full=Path(image_path) if Path(image_path).is_absolute() else Path(project)/image_path
-     evidence=analyze(ROOT,self.data/'vision',full,text,self.client.cancelled,regions.get(str(full)),lambda message:self.bus.event.emit('vision_progress',message))
-     context+=reference(evidence,max_chars=max(500,min(1800,settings.num_ctx//max(1,len(image_paths))//2)))
-    attachments[:]=[path for path in attachments if path not in image_paths]
-    if image_paths and self.client.cancelled.is_set():raise RuntimeError('Lectura de imagen detenida.')
+    AUDIO_SUFFIXES={'.wav','.mp3'}
+    media_paths=[path for path in attachments if Path(path).suffix.lower() in (IMAGE_SUFFIXES|AUDIO_SUFFIXES)]
+    if media_paths and hasattr(self.client,'supports_native_multimodal') and self.client.supports_native_multimodal():
+     full_media=[str(Path(p) if Path(p).is_absolute() else Path(project)/p) for p in media_paths]
+     self.client.pending_media_paths=full_media
+     attachments[:]=[path for path in attachments if path not in media_paths]
+    else:
+     image_paths=[path for path in attachments if Path(path).suffix.lower() in IMAGE_SUFFIXES]
+     for image_path in image_paths:
+      full=Path(image_path) if Path(image_path).is_absolute() else Path(project)/image_path
+      evidence=analyze(ROOT,self.data/'vision',full,text,self.client.cancelled,regions.get(str(full)),lambda message:self.bus.event.emit('vision_progress',message))
+      context+=reference(evidence,max_chars=max(500,min(1800,settings.num_ctx//max(1,len(image_paths))//2)))
+     attachments[:]=[path for path in attachments if path not in image_paths]
+     if image_paths and self.client.cancelled.is_set():raise RuntimeError('Lectura de imagen detenida.')
     async def emit(kind,data):self.bus.event.emit('agent',(kind,data))
     async def approve(p):
      reply={'event':threading.Event(),'proposal':p,'approved':False};self.bus.event.emit('approval',reply)

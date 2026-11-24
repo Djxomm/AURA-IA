@@ -16,8 +16,8 @@ from pathlib import Path
 
 
 NEURAL_VOICES: tuple[tuple[str, str], ...] = (
-    ("auto", "Automática · Dalia (AURA/AURAX) / Jorge (MATEO/ANGEL)"),
-    ("es-MX-DaliaNeural", "Dalia · Español México (femenina natural · AURA/AURAX)"),
+    ("auto", "Automática · Dalia (AURA/Zamara) / Jorge (MATEO/ANGEL)"),
+    ("es-MX-DaliaNeural", "Dalia · Español México (femenina natural · AURA/Zamara)"),
     ("es-MX-JorgeNeural", "Jorge · Español México (masculina natural · MATEO/ANGEL)"),
     ("es-US-PalomaNeural", "Paloma · Español Latino (femenina cálida)"),
     ("es-US-AlonsoNeural", "Alonso · Español Latino (masculina cálida)"),

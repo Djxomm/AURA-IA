@@ -39,7 +39,8 @@ BUILTIN_ACTIONS: tuple[tuple[str, str, str, str], ...] = (
     ("/kicad", "KiCad 10 · Esquemáticos y PCBs", "Crea diagramas electrónicos (.kicad_sch/.kicad_pro/.svg), ERC/DRC, Gerbers y STEP", "Diagramas"),
     ("/diagrama", "Diagramas de bloques, flujo y circuitos", "Genera diagramas vectoriales SVG, Mermaid y esquemáticos KiCad 10 offline", "Diagramas"),
     ("/entrenar", "Entrenar modelos IA locales (desde 0 / LLaMA Pro)", "Enseña, diseña y prepara pipelines locales para entrenar modelos desde 0 o subirlos de categoría", "IA / ML"),
-    ("/conversar", "Conversar por voz en vivo (manos libres)", "Inicia o detiene conversación de voz fluida con MATEO / ANGEL / AURAX con voz neural natural", "Voz"),
+    ("/conversar", "Conversar por voz en vivo (manos libres)", "Inicia o detiene conversación de voz fluida con MATEO / Zamara / AURAX con voz neural natural", "Voz"),
+    ("/zamara", "AURA - Zamara Multimodal (Audio · Imagen · Video)", "Cambia a AURA - Zamara Multimodal (Gemma 4 E4B nativo + MTP) para audio, imagen, video y código", "Modelos"),
     ("/investigar", "Agente Investigador Profundo", "Investiga en web y código real y entrega informe verificado con fuentes", "Especialistas"),
     ("/programar", "Agente de Programación Avanzada", "Razonamiento paso a paso, arquitectura multilenguaje, compilación y pruebas reales", "Especialistas"),
     ("/razonar", "Razonamiento paso a paso (programación profunda)", "Activa deliberación estructurada paso a paso (<thought>) antes de editar y compilar", "Especialistas"),
@@ -322,6 +323,8 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
 
     if cmd in ("/conversar", "/voz", "/hablar"):
         return {"type": "toggle_live_conversation", "arg": rest}
+    if cmd == "/zamara":
+        return {"type": "switch_zamara", "prompt": rest}
     if cmd == "/razonar":
         task = rest or "Analiza el proyecto actual paso a paso, identifica riesgos o fallos y propón o aplica la corrección verificada."
         return {

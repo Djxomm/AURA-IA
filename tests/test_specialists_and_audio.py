@@ -109,3 +109,46 @@ def test_audio_studio_wav_resample_srt_and_vosk(tmp_path):
         assert res["ok"] is True
         assert (tmp_path / "prueba_transcripcion.txt").is_file()
         assert (tmp_path / "prueba_subtitulos.srt").is_file()
+
+
+def test_zamara_multimodal_pairing_and_payload(tmp_path):
+    import struct
+    from agente_ia.chat_controls import model_label
+    from agente_ia.model_library import curate_proven_models, discover, find_paired_multimodal_files, is_helper_gguf
+    from agente_ia.native_core import NativeClient
+    from agente_ia.native_voice import pick_persona_neural_voice
+    from agente_ia.slash_palette import resolve_slash_command
+
+    def _mk_gguf(p: Path, arch: str = "gemma4", name: str = "Gemma 4 E4B It"):
+        def _s(x: str) -> bytes:
+            b = x.encode("utf-8")
+            return struct.pack("<Q", len(b)) + b
+        kvs = [("general.architecture", 8, _s(arch)), ("general.name", 8, _s(name)), (f"{arch}.block_count", 4, struct.pack("<I", 42)), (f"{arch}.context_length", 4, struct.pack("<I", 131072))]
+        buf = bytearray(b"GGUF") + struct.pack("<IQQ", 3, 0, len(kvs))
+        for k, kind, val in kvs:
+            buf += _s(k) + struct.pack("<I", kind) + val
+        p.write_bytes(bytes(buf) + b"\x00" * 1024)
+
+    z = tmp_path / "AURA-Zamara-Multimodal-E4B-Q4_K_M.gguf"
+    mm = tmp_path / "mmproj-AURA-Zamara-Multimodal-E4B-Q8_0.gguf"
+    mtp = tmp_path / "mtp-AURA-Zamara-Multimodal-E4B-Q8_0.gguf"
+    _mk_gguf(z); _mk_gguf(mm); _mk_gguf(mtp)
+
+    assert is_helper_gguf(mm) and is_helper_gguf(mtp) and not is_helper_gguf(z)
+    assert discover([tmp_path]) == [z.resolve()]
+    assert curate_proven_models([z, mm, mtp]) == [z.resolve()]
+    assert model_label(z) == "AURA - Zamara Multimodal"
+    assert pick_persona_neural_voice(z.name) == "es-MX-DaliaNeural"
+    assert resolve_slash_command("/zamara analiza esta foto")["type"] == "switch_zamara"
+
+    paired = find_paired_multimodal_files(z)
+    assert paired["mmproj"] == mm.resolve() and paired["mtp"] == mtp.resolve()
+
+    img = tmp_path / "foto.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    wav = tmp_path / "voz.wav"
+    wav.write_bytes(b"RIFFfakeWAVE")
+    mm_msgs = NativeClient._build_multimodal_messages([{"role": "user", "content": "Analiza ambos"}], [img, wav])
+    parts = mm_msgs[0]["content"]
+    assert isinstance(parts, list) and [p["type"] for p in parts] == ["text", "image_url", "input_audio"]
+

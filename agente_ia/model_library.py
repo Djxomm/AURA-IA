@@ -45,6 +45,25 @@ def model_info(path):
     return dict(_info(str(path),stat.st_size,stat.st_mtime_ns))
 
 
+def is_helper_gguf(path) -> bool:
+    low = Path(path).name.lower()
+    return low.startswith(("mmproj", "mtp-")) or "-mmproj" in low
+
+
+def find_paired_multimodal_files(model_path) -> dict[str, Path | None]:
+    """Localiza proyectores multimodales (`mmproj*.gguf`) y aceleradores MTP (`mtp-*.gguf`) junto al modelo."""
+    p = Path(model_path).resolve()
+    parent = p.parent
+    if not parent.is_dir():
+        return {"mmproj": None, "mtp": None}
+    mmprojs = sorted(parent.glob("mmproj*.gguf"), key=lambda x: ("q8" not in x.name.lower(), x.stat().st_size))
+    mtps = sorted(parent.glob("mtp-*.gguf"), key=lambda x: ("q8" not in x.name.lower(), x.stat().st_size))
+    return {
+        "mmproj": mmprojs[0] if mmprojs else None,
+        "mtp": mtps[0] if mtps else None,
+    }
+
+
 def discover(directories):
     result=[]
     seen=set()
@@ -58,12 +77,12 @@ def discover(directories):
             for record in catalog.get('models',[]):
                 if not isinstance(record,dict) or record.get('status')!='ready':continue
                 path=(root/record.get('filename','')).resolve()
-                if path.is_relative_to(root) and path.is_file() and path.stat().st_size==record.get('size') and path not in seen:
+                if path.is_relative_to(root) and path.is_file() and not is_helper_gguf(path) and path.stat().st_size==record.get('size') and path not in seen:
                     seen.add(path);result.append(path)
         else:
             for path in sorted(root.glob('*.gguf')):
                 rp=path.resolve()
-                if rp in seen or not rp.is_file() or rp.stat().st_size<1024:continue
+                if rp in seen or is_helper_gguf(rp) or not rp.is_file() or rp.stat().st_size<1024:continue
                 try:
                     with rp.open('rb') as f:
                         if f.read(4)!=b'GGUF':continue
@@ -116,12 +135,14 @@ def model_skill_profile(path):
         try:gname=str(model_info(p).get('general.name') or '').strip().lower()
         except (OSError,ValueError):gname=''
     combined=f'{low} {gname}'
+    if 'aura-zamara' in low or 'zamara' in combined or 'gemma-4-e4b' in low or 'gemma-4-e2b' in low:
+        return {'proven':True,'tier':0,'rank':0,'canonical':'aura-zamara-multimodal','category':'★ Multimodal Nativo (Audio · Imagen · Video · Código)','skills':'Audio + Imagen + Video nativos · razonamiento <thought> · 128K · E4B MTP'}
     if 'aura-mateo-pro' in low or 'mateo pro' in combined:
-        return {'proven':True,'tier':0,'rank':0,'canonical':'aura-mateo-pro','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Sucesor élite · multilenguaje · diseño gráfico · entrenar IA · Android · KiCad · PC'}
+        return {'proven':True,'tier':0,'rank':1,'canonical':'aura-mateo-pro','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Sucesor élite · multilenguaje · diseño gráfico · entrenar IA · Android · KiCad · PC'}
     if ('aura-angel-5.6' in low or 'angel 5.6' in combined) and not any(tag in low for tag in ('-r1-','-r2-')):
-        return {'proven':True,'tier':0,'rank':1,'canonical':'aura-angel-5.6','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Aprobado 56/56 (100%) · Full-Stack · Android · KiCad · PC · Video/3D'}
+        return {'proven':True,'tier':0,'rank':2,'canonical':'aura-angel-5.6','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Aprobado 56/56 (100%) · Full-Stack · Android · KiCad · PC · Video/3D'}
     if 'aura-lumen-2.0ib_v2' in low or 'lumen 2.0ib_v2' in combined:
-        return {'proven':True,'tier':0,'rank':2,'canonical':'aura-lumen-2.0ib_v2','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Código · UI/WCAG · FastAPI · herramientas AURA'}
+        return {'proven':True,'tier':0,'rank':3,'canonical':'aura-lumen-2.0ib_v2','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Código · UI/WCAG · FastAPI · herramientas AURA'}
     if 'aura-lumen-2.0ib_v1' in low or 'lumen 2.0ib_v1' in combined:
         return {'proven':True,'tier':1,'rank':0,'canonical':'aura-lumen-2.0ib_v1','category':'⚙ Edición de Código y Herramientas AURA','skills':'Edición Python · herramientas AURA'}
     if 'qwen2.5-coder-3b-instruct' in low:
@@ -150,7 +171,7 @@ def curate_proven_models(paths,*,current=None,extra_runs_dirs=(),explicit_models
     for run_root in extra_runs_dirs:
         root=Path(run_root)
         if not root.is_dir():continue
-        for pat in ('AURA-MATEO-Pro*.gguf','AURA-ANGEL-5.6-Q4_K_M.gguf','AURA-ANGEL-5.6*.gguf','AURA-MATEO-Nano*-Q8_0.gguf','AURA-Lumen-2.0IB_V2*.gguf','AURA-Lumen-2.0IB_V1*.gguf'):
+        for pat in ('AURA-Zamara*.gguf','AURA-MATEO-Pro*.gguf','AURA-ANGEL-5.6-Q4_K_M.gguf','AURA-ANGEL-5.6*.gguf','AURA-MATEO-Nano*-Q8_0.gguf','AURA-Lumen-2.0IB_V2*.gguf','AURA-Lumen-2.0IB_V1*.gguf'):
             candidates.extend(sorted(root.rglob(pat),key=lambda x:x.stat().st_mtime,reverse=True))
     candidates.extend(Path(p) for p in paths)
     cur_resolved=None
@@ -160,7 +181,7 @@ def curate_proven_models(paths,*,current=None,extra_runs_dirs=(),explicit_models
     by_canonical={}
     for raw in candidates:
         p=Path(raw)
-        if not p.is_file() or p.suffix.lower()!='.gguf':continue
+        if not p.is_file() or p.suffix.lower()!='.gguf' or is_helper_gguf(p):continue
         rp=p.resolve()
         prof=model_skill_profile(rp)
         is_current=(cur_resolved is not None and rp==cur_resolved)

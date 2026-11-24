@@ -353,7 +353,7 @@ class NativeClient:
      media_paths=list(getattr(self,'pending_media_paths',()) or ())
      self.pending_media_paths=[]
      res=self._generate_server_chat(messages,budget,settings,callback,engine,effective,gpu_args,paired.get('mmproj'),paired.get('mtp'),media_paths=media_paths)
-     tag=' · Zamara Multimodal nativo' + (' + MTP' if paired.get('mtp') else '')
+     tag=' · Zamara V8.2 Multimodal nativo' + (' + MTP' if paired.get('mtp') else '')
      if tag not in self.backend_note:
       self.backend_note+=tag
      return res

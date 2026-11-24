@@ -9,7 +9,7 @@ LEVELS={'rapido':'Rápido','equilibrado':'Equilibrado','profundo':'Profundo','ma
 
 def model_label(path):
     p=Path(path);name=p.stem;low=name.lower()
-    if 'aura-zamara' in low:return 'AURA - Zamara Multimodal'
+    if 'aura-zamara' in low or 'zamara' in low:return 'AURA - Zamara V8.2'
     if 'aura-mateo-pro' in low:return 'AURA - MATEO Pro'
     if 'aura-mateo-nano' in low:return 'AURA - MATEO-Nano (desde 0)'
     if "gpt-oss-20b" in low:return "OpenAI gpt-oss · 20B · Experimental"

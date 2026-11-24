@@ -137,7 +137,8 @@ def test_zamara_multimodal_pairing_and_payload(tmp_path):
     assert is_helper_gguf(mm) and is_helper_gguf(mtp) and not is_helper_gguf(z)
     assert discover([tmp_path]) == [z.resolve()]
     assert curate_proven_models([z, mm, mtp]) == [z.resolve()]
-    assert model_label(z) == "AURA - Zamara Multimodal"
+    assert model_label(z) == "AURA - Zamara V8.2"
+    assert model_label(tmp_path / "AURA-Zamara-V8.2-E4B-Q4_K_M.gguf") == "AURA - Zamara V8.2"
     assert pick_persona_neural_voice(z.name) == "es-MX-DaliaNeural"
     assert resolve_slash_command("/zamara analiza esta foto")["type"] == "switch_zamara"
 

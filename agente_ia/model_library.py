@@ -136,7 +136,7 @@ def model_skill_profile(path):
         except (OSError,ValueError):gname=''
     combined=f'{low} {gname}'
     if 'aura-zamara' in low or 'zamara' in combined or 'gemma-4-e4b' in low or 'gemma-4-e2b' in low:
-        return {'proven':True,'tier':0,'rank':0,'canonical':'aura-zamara-multimodal','category':'★ Multimodal Nativo (Audio · Imagen · Video · Código)','skills':'Audio + Imagen + Video nativos · razonamiento <thought> · 128K · E4B MTP'}
+        return {'proven':True,'tier':0,'rank':0,'canonical':'aura-zamara-v8.2','category':'★ Zamara V8.2 Multimodal (Audio · Imagen · Video · Código)','skills':'Audio + Imagen + Video nativos · razonamiento <thought> · 128K · E4B MTP'}
     if 'aura-mateo-pro' in low or 'mateo pro' in combined:
         return {'proven':True,'tier':0,'rank':1,'canonical':'aura-mateo-pro','category':'★ Construcción, Razonamiento y Full-Stack','skills':'Sucesor élite · multilenguaje · diseño gráfico · entrenar IA · Android · KiCad · PC'}
     if ('aura-angel-5.6' in low or 'angel 5.6' in combined) and not any(tag in low for tag in ('-r1-','-r2-')):

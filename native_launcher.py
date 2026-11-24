@@ -265,11 +265,11 @@ class Window(QMainWindow):
     if rtype=='switch_zamara':
      cand=next((p for p in self.list_available_models() if 'zamara' in p.name.lower() or 'gemma-4-e4b' in p.name.lower()),None)
      if cand is None:
-      self.input.clear();self.status.setText('AURA - Zamara Multimodal aÃºn se estÃ¡ descargando o no estÃ¡ registrada en Modelos.');return
+      self.input.clear();self.status.setText('AURA - Zamara V8.2 aún no está descargada o registrada en Modelos.');return
      self.select_model(str(cand))
      prompt_after=str(resolved.get('prompt') or '').strip()
      if not prompt_after:
-      self.input.clear();self.status.setText('Modelo activo: AURA - Zamara Multimodal (Audio Â· Imagen Â· Video Â· 128K nativo)');return
+      self.input.clear();self.status.setText('Modelo activo: AURA - Zamara V8.2 (Audio · Imagen · Video · 128K nativo)');return
      text=prompt_after;resolved=None
     if rtype=='open_panel':
      self.input.clear();{'skills':self.skills_panel,'settings':self.settings,'changes':self.changes}[resolved['panel']]();return

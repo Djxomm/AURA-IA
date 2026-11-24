@@ -82,7 +82,13 @@ def btn(text,fn):
  b=QPushButton(text);b.clicked.connect(fn);return b
 
 class StartupSplash(QWidget):
- """Loading animation shown before the main window, until the model is ready."""
+ """Transparent desktop startup animation (no black box), with legacy MP4 fallback if explicitly passed."""
+ def __new__(cls,owner,path):
+  if Path(path).is_dir():
+   from agente_ia.avatar_3d import TransparentStartupSplash
+   model_ref=getattr(getattr(owner,'client',None),'model',None)
+   return TransparentStartupSplash(owner,Path(path),model_ref)
+  return super().__new__(cls)
  def __init__(self,owner,path):
   super().__init__(None,Qt.WindowType.SplashScreen|Qt.WindowType.FramelessWindowHint)
   self.owner=owner;self.setWindowTitle('Iniciando AURA');self.setWindowIcon(QIcon(str(ASSETS/'aura.ico')));self.resize(760,500);layout=QVBoxLayout(self);layout.setContentsMargins(0,0,0,0);layout.setSpacing(0);video=QVideoWidget();layout.addWidget(video);self.setStyleSheet('background:black;')
@@ -213,9 +219,8 @@ class Window(QMainWindow):
   if path not in self.attached_files:self.attached_files.append(path)
   self.open_aurax();self.status.setText('Adjuntos para AURAX: '+', '.join(self.attached_files));self.input.setFocus()
  def start(self):
-  path=ASSETS/'aura-inicio.mp4'
-  if self.prefs.get('intro',True) and path.is_file():
-   self.startup=StartupSplash(self,path);self.startup.begin()
+  if self.prefs.get('intro',True):
+   self.startup=StartupSplash(self,ASSETS);self.startup.begin()
   else:self.finish_startup()
   QTimer.singleShot(0,self.prepare_model)
  def finish_startup(self):
@@ -257,10 +262,13 @@ class Window(QMainWindow):
    from agente_ia.chat_controls import model_label
    meta=persona_meta(resolve_avatar_persona(self.client.model))
    lbl=model_label(self.client.model)
+   logo_uri=(ASSETS/'aura-logo-transparente.png').as_uri() if (ASSETS/'aura-logo-transparente.png').is_file() else ''
+   logo_img=('<img width="84" style="background:transparent;margin-bottom:10px;" src="'+logo_uri+'">') if logo_uri else ''
    self.chat.set_welcome(
-    '<div style="text-align:center;margin-top:54px;font-family:Segoe UI,sans-serif;">'
-    '<div style="font-size:11px;letter-spacing:2.5px;color:'+meta.accent+';font-weight:700;">AURA STUDIO · WORKSPACE LOCAL</div>'
-    '<h1 style="color:#f8fafc;font-size:28px;margin:10px 0 6px 0;font-weight:800;">'+lbl+'</h1>'
+    '<div style="text-align:center;margin-top:42px;font-family:Segoe UI,sans-serif;background:transparent;">'
+    +logo_img+
+    '<div style="font-size:11px;letter-spacing:2.5px;color:'+meta.accent+';font-weight:700;">AURA IA · MODO OSCURO · WORKSPACE LOCAL</div>'
+    '<h1 style="color:#f8fafc;font-size:28px;margin:8px 0 6px 0;font-weight:800;">'+lbl+'</h1>'
     '<p style="color:#94a3b8;font-size:14px;margin:0 0 18px 0;">'+meta.subtitle+' · 100 % offline en tu equipo</p>'
     '<p style="color:#cbd5e1;font-size:13px;">Escribe tu orden, usa <code style="color:'+meta.accent_soft+'">/</code> para agentes y comandos, o abre <b>AURAX · QbitX</b> y <b>Codex / OpenCode · AURA</b>.</p>'
     '</div>'

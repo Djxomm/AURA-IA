@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 
@@ -30,12 +31,22 @@ def test_avatar_persona_resolution_and_3d_rendering():
             assert pix.hasAlphaChannel()
 
     stage = AvatarStageWidget(compact=True)
+    assert stage.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
     stage.set_model("AURA-Zamara-V8.2-E4B-Q4_K_M.gguf", "AURA - Zamara V8.2")
     assert stage.persona == "zamara"
     stage.set_state("thinking")
     assert stage.state == "thinking"
     stage.close()
     stage.deleteLater()
+
+    from agente_ia.avatar_3d import TransparentStartupSplash
+
+    splash = TransparentStartupSplash(None, Path("agente_ia/static/assets"), "AURA-ANGEL-5.6-Q4_K_M.gguf")
+    assert splash.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    assert splash.persona == "angel"
+    snap = splash.grab()
+    assert not snap.isNull()
+    splash.release()
 
 
 def test_codex_and_opencode_aura_local_bridge(tmp_path, monkeypatch):

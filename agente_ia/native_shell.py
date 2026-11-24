@@ -38,7 +38,17 @@ def build_shell(w,assets):
     for title,callback in [('Recursos y tareas',w.open_resources),('Archivos comprimidos',w.open_archives),('Bases de datos SQL',w.open_sql),('Explorador de Internet',w.open_browser),('Habilidades',w.skills_panel),('Terminal y compilación',w.terminal),('Cambios y deshacer',w.changes)]:menu.addAction(title,callback)
     more.setMenu(menu);more.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);r.addWidget(more);r.addStretch();r.addWidget(tool(w,'settings','Configuración',w.settings))
     side=QWidget();side.setObjectName('sidebar');side.setMinimumWidth(170);side.setMaximumWidth(300);sl=QVBoxLayout(side);sl.setContentsMargins(12,14,12,12);sl.setSpacing(8)
-    brand=QLabel('AURA IA');brand.setObjectName('brand');sl.addWidget(brand)
+    brand_row=QHBoxLayout();brand_row.setContentsMargins(0,0,0,0);brand_row.setSpacing(8)
+    logo_lbl=QLabel();logo_lbl.setStyleSheet('background:transparent;border:none;')
+    lpix=QPixmap(str(Path(assets)/'aura-logo-transparente.png'))
+    if lpix.isNull():lpix=QPixmap(str(Path(assets)/'aura-icono-transparente.png'))
+    if not lpix.isNull():
+        from PySide6.QtGui import QRegion
+        b=QRegion(lpix.mask()).boundingRect()
+        if not b.isEmpty():lpix=lpix.copy(b)
+        logo_lbl.setPixmap(lpix.scaled(30,30,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
+        brand_row.addWidget(logo_lbl)
+    brand=QLabel('AURA IA');brand.setObjectName('brand');brand_row.addWidget(brand,1);sl.addLayout(brand_row)
     w.avatar_stage=AvatarStageWidget(side,compact=True);w.avatar_stage.set_animations_enabled(bool(w.prefs.get('animations',True)))
     w.avatar_stage.set_model(getattr(getattr(w,'client',None),'model',None),model_label(getattr(getattr(w,'client',None),'model',None)))
     w.avatar_stage.clicked.connect(lambda:w.floating.show() if hasattr(w,'floating') else None)

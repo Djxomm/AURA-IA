@@ -1,0 +1,111 @@
+"""Pruebas de Agentes Especialistas (estilo A4B), Razonamiento paso a paso <thought>,
+Estudio de Audio offline (Vosk .txt/.srt), Voz Neural natural y servidor rápido KV-RAM."""
+
+from __future__ import annotations
+
+import math
+import struct
+import wave
+from pathlib import Path
+
+
+def test_strip_thought_and_parallel_tool_calls():
+    from agente_ia.tools import parse_xml_tool_calls, strip_thought_blocks
+
+    raw = (
+        "<thought>\n"
+        "1. Primero inspecciono archivos y RAM en paralelo.\n"
+        "2. Luego decido qué compilar.\n"
+        "</thought>\n"
+        "```tool_call\n"
+        '{"name": "list_files", "arguments": {"path": "."}}\n'
+        "```\n"
+        "```tool_call\n"
+        '{"name": "pc_inspect", "arguments": {"action": "system_info"}}\n'
+        "```"
+    )
+    visible, thought = strip_thought_blocks(raw)
+    assert "Primero inspecciono" in thought and "<thought>" not in visible
+    clean, calls = parse_xml_tool_calls(raw)
+    assert clean == ""
+    assert [c["name"] for c in calls] == ["list_files", "pc_inspect"]
+
+
+def test_six_autonomous_specialists_and_slash_commands():
+    from agente_ia.agent_specialists import build_specialist_prompt, list_specialists
+    from agente_ia.slash_palette import resolve_slash_command
+
+    specs = list_specialists()
+    ids = {s["id"] for s in specs}
+    assert ids == {"investigacion", "programacion", "grafica", "conflictos", "audio", "complejo"}
+
+    prompt, eff = build_specialist_prompt("conflictos", "Resuelve los conflictos de git en app.py")
+    assert "<<<<<<<" in prompt and eff == "profundo"
+
+    assert resolve_slash_command("/conversar")["type"] == "toggle_live_conversation"
+    r_raz = resolve_slash_command("/razonar arregla el algoritmo")
+    assert r_raz["type"] == "prompt" and r_raz["thinking_effort"] == "profundo" and "<thought>" in r_raz["prompt"]
+    for cmd in ("/investigar", "/programar", "/grafico", "/conflictos", "/audio", "/traducir-audio", "/complejo"):
+        res = resolve_slash_command(f"{cmd} tarea de prueba")
+        assert res["type"] == "prompt" and res["auto_autonomous"] is True
+
+
+def test_neural_voice_persona_and_naturalizer():
+    from agente_ia.native_voice import naturalize_spoken_text, pick_persona_neural_voice
+
+    assert pick_persona_neural_voice("AURA-MATEO-Pro-Q4_K_M.gguf") == "es-MX-JorgeNeural"
+    assert pick_persona_neural_voice("AURA-ANGEL-5.6-Q4_K_M.gguf") == "es-MX-JorgeNeural"
+    assert pick_persona_neural_voice("AURA-Lumen-2.0IB_V2.gguf") == "es-MX-DaliaNeural"
+    assert pick_persona_neural_voice("AURA-MATEO-Pro.gguf", "es-US-PalomaNeural") == "es-US-PalomaNeural"
+
+    text = "<thought>secreto</thought>\n### Resultado\nRevisa `app.py`:\n```python\nprint(1)\n```\nVer https://ejemplo.com"
+    spoken = naturalize_spoken_text(text)
+    assert "secreto" not in spoken
+    assert "```" not in spoken and "Te dejé el código en pantalla" in spoken
+    assert "https://" not in spoken
+
+
+def test_audio_studio_wav_resample_srt_and_vosk(tmp_path):
+    from agente_ia.audio_studio import (
+        build_audio_translation_prompt,
+        find_vosk_model,
+        format_srt,
+        format_transcript_text,
+        load_pcm16_mono_16k,
+        transcribe_audio_file,
+    )
+    from agente_ia.workspace import SafeWorkspace
+
+    # Generar WAV estéreo 44.1 kHz (0.5 s silencio/tono suave) para probar remuestreo puro Python
+    wav_path = tmp_path / "prueba.wav"
+    sr = 44100
+    nframes = sr // 2
+    with wave.open(str(wav_path), "wb") as wf:
+        wf.setnchannels(2)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        frames = bytearray()
+        for i in range(nframes):
+            val = int(1200 * math.sin(2 * math.pi * 440.0 * i / sr))
+            frames += struct.pack("<hh", val, val)
+        wf.writeframes(bytes(frames))
+
+    pcm, dur = load_pcm16_mono_16k(wav_path)
+    assert len(pcm) > 10000 and 0.45 <= dur <= 0.55
+
+    segs = [{"start": 0.0, "end": 3.5, "text": "hola mateo"}, {"start": 3.8, "end": 7.2, "text": "revisemos el proyecto"}]
+    srt = format_srt(segs)
+    assert "00:00:00,000 --> 00:00:03,500" in srt and "hola mateo" in srt
+    txt = format_transcript_text(segs)
+    assert "[00:00 -> 00:03] hola mateo" in txt
+    tprompt = build_audio_translation_prompt(txt, "inglés")
+    assert "inglés" in tprompt and ".srt" in tprompt
+
+    # Si está el modelo Vosk local en runtime/voz, probar transcripción real 100 % offline
+    model_dir = find_vosk_model()
+    if model_dir is not None:
+        ws = SafeWorkspace(str(tmp_path))
+        res = transcribe_audio_file(ws, "prueba.wav")
+        assert res["ok"] is True
+        assert (tmp_path / "prueba_transcripcion.txt").is_file()
+        assert (tmp_path / "prueba_subtitulos.srt").is_file()

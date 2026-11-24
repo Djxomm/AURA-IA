@@ -79,12 +79,13 @@ class Window(QMainWindow):
   if (ROOT/'skills/android-adb-dev/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','android-adb-dev')
   if (ROOT/'skills/kicad-diagramas/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','kicad-diagramas')
   if (ROOT/'skills/video-diseno-studio/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','video-diseno-studio')
+  if (ROOT/'skills/entrenar-modelos-ia/SKILL.md').is_file():self.skills.install_bundled(ROOT/'skills','entrenar-modelos-ia')
   self.registry=ApprovalRegistry()
   self.client=NativeClient(ROOT,self.data/'nativo',self.prefs.get('model'));self.client.auto_context=self.prefs.get('auto_context',True);self.client.acceleration=self.prefs.get('acceleration','auto');self.engine=AgentEngine(self.store,self.client,self.registry,self.skills)
-  self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
+  self.dictation=Dictation(ROOT);self.bus=Bus();self.bus.event.connect(self.handle_event);self.busy=False;self.warming=False;self.sid=None;self.items=[];self.answer='';self.last_answer='';self.voice_process=None;self.dictating=False;self.live_conversation=False;self.voice_generation=0;self.voice_key=VoiceKey(self.data)
   self.setWindowTitle('AURA Â· Inteligencia Artificial â€” Escritorio');self.setWindowIcon(QIcon(str(ASSETS/'aura-icono-transparente.png')));self.resize(1180,760);self.setMinimumSize(760,540)
   build_shell(self,ASSETS)
-  self.audio=QAudioOutput();self.player=QMediaPlayer();self.player.setAudioOutput(self.audio);self.audio.setVolume(self.prefs.get('volume',90)/100)
+  self.audio=QAudioOutput();self.player=QMediaPlayer();self.player.setAudioOutput(self.audio);self.audio.setVolume(self.prefs.get('volume',90)/100);self.player.playbackStateChanged.connect(self._on_voice_playback_changed)
   self.floating=FloatingAssistant(self)
   self.new_chat();self.refresh_history();self.timer=QTimer(self);self.timer.timeout.connect(self.progress);self.timer.start(300)
   self.startup=None;self.startup_finished=False;self.attached_files=[];self.aurax=None;self.aurax_dock=None;self.terminal_panel=None;self.terminal_dock=None;self.mode.currentIndexChanged.connect(lambda index:self.open_aurax() if index==1 else None);self.autonomous.toggled.connect(self.toggle_autonomous)
@@ -258,6 +259,9 @@ class Window(QMainWindow):
     if rtype=='toggle_autonomous':
      self.input.clear();arg=resolved.get('arg','').lower();target=True if arg in ('on','si','sÃ­','1','activar') else False if arg in ('off','no','0','desactivar') else not self.autonomous.isChecked()
      self.autonomous.setChecked(target);return
+    if rtype=='toggle_live_conversation':
+     self.input.clear();arg=resolved.get('arg','').lower();target=True if arg in ('on','si','sÃ­','1','iniciar','activar') else False if arg in ('off','no','0','detener','salir') else None
+     self.toggle_live_conversation(target);return
     if rtype=='open_panel':
      self.input.clear();{'skills':self.skills_panel,'settings':self.settings,'changes':self.changes}[resolved['panel']]();return
     if rtype=='open_external_agents':
@@ -280,6 +284,7 @@ class Window(QMainWindow):
      slash_auto=bool(resolved.get('auto_autonomous',True));self.open_aurax();text=resolved['prompt']
     elif rtype=='prompt':
      slash_auto=bool(resolved.get('auto_autonomous',False))
+     if resolved.get('thinking_effort'):slash_effort=resolved['thinking_effort']
      if resolved.get('force_programming') and not self.temporary.isChecked():self.open_aurax()
      text=resolved['prompt']
   # Adjuntar automÃ¡ticamente archivos reales mencionados con @ruta
@@ -297,6 +302,7 @@ class Window(QMainWindow):
   if self.temporary.isChecked() and (self.mode.currentIndex()==1 or actions or auto_on):self.error('El modo temporal es solo conversaciÃ³n. DesactÃ­valo para trabajar sobre archivos.');return
   settings=self.store.get_settings();project=settings.workspace_path
   if auto_on and not settings.autonomous_mode:settings=settings.model_copy(update={'autonomous_mode':True})
+  if locals().get('slash_effort'):settings=settings.model_copy(update={'thinking_effort':slash_effort})
   if self.mode.currentIndex()==1:
    from agente_ia.model_library import programming_settings
    settings=programming_settings(settings,self.prefs.get('stable_code',True))
@@ -428,14 +434,26 @@ class Window(QMainWindow):
    if kind=='done' and self.mode.currentIndex()==1:
     summary='QbitX Â· Acciones ejecutadas en el proyecto' if getattr(self,'command_runner',None) is not None else 'AURAX Â· '+str(getattr(self,'run_changes',0))+' cambios aplicados' if getattr(self,'run_changes',0) else 'AURAX Â· respuesta sin cambios en archivos';self.status.setText(self.status.text()+' Â· '+summary)
     if self.aurax is not None:self.aurax.console.appendPlainText(summary)
-   if kind=='done' and self.auto_voice.isChecked():self.speak()
+   if kind=='done' and (self.auto_voice.isChecked() or self.live_conversation):self.speak()
+   elif kind=='failed' and self.live_conversation:self.live_conversation=False;self.status.setText('ConversaciÃ³n en vivo pausada por error.')
   elif kind=='approval':
    p=data['proposal'];is_pc=p.action=='pc_control';is_exec=p.action=='exec';self.floating.set_attention('Autoriza esta acciÃ³n en tu PC.' if is_pc else 'Autoriza el comando propuesto.' if is_exec else 'Revisa el cambio propuesto.');d,l=self.dialog(('Autorizar control de PC Â· ' if is_pc else 'Autorizar comando Â· ' if is_exec else 'Revisar cambio Â· ')+p.file_path);l.addWidget(QLabel(p.reason));view=QPlainTextEdit(p.unified_diff or p.proposed_content or 'Eliminar archivo');view.setReadOnly(True);l.addWidget(view);buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Yes|QDialogButtonBox.StandardButton.No);buttons.accepted.connect(d.accept);buttons.rejected.connect(d.reject);l.addWidget(buttons);data['approved']=d.exec()==QDialog.DialogCode.Accepted;data['event'].set();self.floating.set_attention('')
   elif kind=='dictated':self.dictating=False;self.mic.setToolTip('â— Dictar');self.input.setPlainText(data);self.status.setText('Dictado listo. Corrige el texto y pulsa Enviar.')
-  elif kind=='voice_ready':self.player.setSource(QUrl.fromLocalFile(str(data)));self.player.play();self.status.setText('Hablando Â· Detener corta el audio')
+  elif kind=='live_heard':
+   self.dictating=False;self.mic.setToolTip('â— Dictar')
+   heard=str(data or '').strip()
+   if not self.live_conversation:return
+   if not heard:
+    QTimer.singleShot(350,self._listen_live_turn);return
+   low=heard.lower()
+   if any(phrase in low for phrase in ('deten conversacion','detÃ©n conversaciÃ³n','detener conversacion','detener conversaciÃ³n','salir de voz','terminar conversacion','terminar conversaciÃ³n','adios aura','adiÃ³s aura','adios mateo','adiÃ³s mateo')):
+    self.live_conversation=False;self.status.setText('ConversaciÃ³n en vivo terminada.');return
+   self.input.setPlainText(heard);self.send()
+  elif kind=='voice_ready':self.player.setSource(QUrl.fromLocalFile(str(data)));self.player.play();self.status.setText('Hablando con voz natural Â· Detener corta el audio')
   elif kind=='voice_fallback':self.status.setText(data)
   elif kind=='notice':self.error(data)
  def stop(self):
+  self.live_conversation=False
   if getattr(self,'command_runner',None) is not None:self.command_runner.stop()
   self.voice_generation+=1;self.client.stop();self.dictation.stop();self.player.stop();self.dictating=False;self.mic.setToolTip('â— Dictar');p=self.voice_process;self.voice_process=None;self.status.setText('Deteniendoâ€¦');p.terminate() if p is not None and p.poll() is None else None
  def settings(self,page_index=0):
@@ -504,6 +522,7 @@ class Window(QMainWindow):
    if arch not in {'qwen2','qwen3','gpt-oss','llama','gemma4','mistral','phi3','deepseek2'}:raise ValueError('Modelo no compatible: usa Qwen2/Qwen3, Llama, Gemma, Mistral o GPT-oss GGUF.')
    registered=self.prefs.get('models',[]);registered=registered if isinstance(registered,list) else [];self.save_pref('models',list(dict.fromkeys([str(p),*[v for v in registered if isinstance(v,str)]])))
    from agente_ia.chat_controls import model_label
+   if hasattr(self.client,'close'):self.client.close()
    self.client.model=p;self.save_pref('model',str(p));self.refresh_chat_controls();self.status.setText('Modelo seleccionado: '+model_label(p))
   except (OSError,ValueError) as exc:self.error(str(exc));self.refresh_chat_controls()
  def models(self):
@@ -617,8 +636,29 @@ class Window(QMainWindow):
    try:self.bus.event.emit('dictated',self.dictation.listen(self.prefs.get('microphone')))
    except Exception as e:self.bus.event.emit('dictated','');self.bus.event.emit('notice','No se pudo usar el micrÃ³fono: '+str(e))
   threading.Thread(target=work,daemon=True).start()
- def speak(self):
-  text=spoken_text(self.last_answer or (self.items[-1][1] if self.items else 'Hola, soy AURA.'))
+ def toggle_live_conversation(self,enable=None):
+  target=(not self.live_conversation) if enable is None else bool(enable)
+  if not target:
+   self.live_conversation=False;self.dictation.stop();self.player.stop();self.dictating=False
+   self.status.setText('ConversaciÃ³n de voz en vivo detenida.');return
+  if self.busy or self.warming:self.error('Espera a que termine la tarea actual antes de conversar en vivo.');return
+  self.live_conversation=True;self.auto_voice.setChecked(True)
+  self.showNormal();self.raise_();self.activateWindow()
+  self.status.setText('ðŸŽ™ï¸ ConversaciÃ³n en vivo activa Â· habla ahora (di Â«detÃ©n conversaciÃ³nÂ» para salir)')
+  self._listen_live_turn()
+ def _listen_live_turn(self):
+  if not self.live_conversation or self.busy or self.warming or self.dictating:return
+  self.player.stop();self.dictating=True;self.mic.setToolTip('ðŸŽ™ï¸ ConversaciÃ³n en vivo Â· escuchandoâ€¦')
+  self.status.setText('ðŸŽ™ï¸ Escuchando tu vozâ€¦ (pausa 1.5 s al terminar de hablar)')
+  def work():
+   try:self.bus.event.emit('live_heard',self.dictation.listen_turn(self.prefs.get('microphone')))
+   except Exception as e:self.live_conversation=False;self.bus.event.emit('dictated','');self.bus.event.emit('notice','MicrÃ³fono no disponible en modo conversaciÃ³n: '+str(e))
+  threading.Thread(target=work,daemon=True).start()
+ def _on_voice_playback_changed(self,state):
+  if state==QMediaPlayer.PlaybackState.StoppedState and self.live_conversation and not self.busy and not self.dictating:
+   QTimer.singleShot(380,self._listen_live_turn)
+ def speak(self,custom_text=None):
+  text=spoken_text(custom_text if custom_text is not None else (self.last_answer or (self.items[-1][1] if self.items else 'Hola, soy AURA.')))
   if not text:return
   self.player.stop()
   if self.voice_process is not None and self.voice_process.poll() is None:self.voice_process.terminate()
@@ -626,12 +666,27 @@ class Window(QMainWindow):
   def work():
    try:
     folder=self.data/'audio';folder.mkdir(exist_ok=True);source=folder/'texto.txt';wav=folder/('respuesta-'+str(time.time_ns())+'.wav');source.write_text(text,'utf-8')
-    if self.prefs.get('voice_mode')=='elevenlabs':
+    vmode=self.prefs.get('voice_mode') or 'neural'
+    if vmode=='elevenlabs':
      try:
       target=folder/('elevenlabs-'+str(time.time_ns())+'.mp3');synthesize(text,self.prefs.get('voice_id',''),self.voice_key.get(),target)
       if generation==self.voice_generation:self.bus.event.emit('voice_ready',target)
       source.unlink(missing_ok=True);return
-     except Exception:self.bus.event.emit('voice_fallback','ElevenLabs no disponible. Usando voz local de respaldo.')
+     except Exception:self.bus.event.emit('voice_fallback','ElevenLabs no disponible. Probando voz neural naturalâ€¦')
+    if vmode in ('neural','elevenlabs'):
+     try:
+      from agente_ia.native_voice import pick_persona_neural_voice,synthesize_neural
+      nvoice=pick_persona_neural_voice(self.client.model.name,self.prefs.get('neural_voice','auto'))
+      target=folder/('neural-'+str(time.time_ns())+'.mp3')
+      synthesize_neural(text,nvoice,target,rate=int(self.prefs.get('rate',0)))
+      for old in folder.glob('neural-*.mp3'):
+       if old!=target:
+        try:old.unlink()
+        except OSError:pass
+      if generation==self.voice_generation:self.bus.event.emit('voice_ready',target)
+      source.unlink(missing_ok=True);return
+     except Exception:
+      self.bus.event.emit('voice_fallback','Sin conexiÃ³n para voz neural. Usando voz local 24 kHz de respaldo.')
     if generation!=self.voice_generation:return
     args=['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(ASSETS/'voz-local.ps1'),'-TextFile',str(source),'-OutputFile',str(wav),'-VoiceName',self.prefs.get('voice',''),'-Rate',str(self.prefs.get('rate',0)),'-Volume',str(self.prefs.get('volume',90))]
     p=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));self.voice_process=p;out,err=p.communicate(timeout=120)
@@ -645,9 +700,14 @@ class Window(QMainWindow):
    except Exception as e:self.bus.event.emit('notice','No se pudo generar el audio: '+str(e))
   threading.Thread(target=work,daemon=True).start()
  def voice_settings(self):
-  d,l=self.dialog('Voz Â· Kate / ElevenLabs y respaldo local');note=QLabel('ElevenLabs envÃ­a el texto de la respuesta al servicio y puede consumir saldo. El dictado y la IA siguen siendo locales. Si no hay conexiÃ³n se usa la voz instalada de Windows. El MP3 de Kate es una referencia, no un modelo offline.');note.setWordWrap(True);l.addWidget(note);form=QFormLayout()
-  mode=QComboBox();mode.addItems(['Solo voz local','ElevenLabs con respaldo local']);mode.setCurrentIndex(1 if self.prefs.get('voice_mode')=='elevenlabs' else 0);form.addRow('Modo de voz',mode)
-  key=QLineEdit();key.setEchoMode(QLineEdit.EchoMode.Password);key.setPlaceholderText('Clave guardada y protegida' if self.voice_key.path.exists() else 'Introduce aquÃ­ tu API key, nunca en el chat');form.addRow('Clave ElevenLabs',key)
+  from agente_ia.native_voice import NEURAL_VOICES
+  d,l=self.dialog('Voz natural Â· ConversaciÃ³n en vivo y respaldo offline');note=QLabel('Voz neural natural (Dalia para AURA/AURAX y Jorge para MATEO/ANGEL) suena cÃ¡lida y humana sin clave API; si no hay Internet cae automÃ¡ticamente a voz local de 24 kHz con pausas naturales. El dictado y la IA siempre corren en tu PC.');note.setWordWrap(True);l.addWidget(note);form=QFormLayout()
+  mode=QComboBox();mode.addItem('Voz neural natural Â· Dalia / Jorge (recomendada, sin clave)','neural');mode.addItem('ElevenLabs con respaldo neural/local','elevenlabs');mode.addItem('Solo voz local 100 % offline (24 kHz SSML)','local')
+  cur_mode=self.prefs.get('voice_mode') or 'neural';mode.setCurrentIndex(max(0,mode.findData(cur_mode)));form.addRow('Modo de voz',mode)
+  nbox=QComboBox()
+  for vid,vlabel in NEURAL_VOICES:nbox.addItem(vlabel,vid)
+  nbox.setCurrentIndex(max(0,nbox.findData(self.prefs.get('neural_voice','auto'))));form.addRow('Voz neural',nbox)
+  key=QLineEdit();key.setEchoMode(QLineEdit.EchoMode.Password);key.setPlaceholderText('Clave guardada y protegida' if self.voice_key.path.exists() else 'Opcional: API key de ElevenLabs');form.addRow('Clave ElevenLabs',key)
   voiceid=QLineEdit(self.prefs.get('voice_id',''));form.addRow('Identificador de Kate',voiceid);catalog=QComboBox();catalog.addItem('Buscar Kate en mi cuentaâ€¦','');form.addRow('Voces disponibles',catalog);catalog.currentIndexChanged.connect(lambda:voiceid.setText(catalog.currentData() or voiceid.text()));querybus=Bus(d)
   def receive(kind,data):
    if kind=='voices':
@@ -662,24 +722,29 @@ class Window(QMainWindow):
     try:querybus.event.emit('voices',voices(entered or self.voice_key.get()))
     except Exception as e:querybus.event.emit('error','No se pudo consultar ElevenLabs: '+str(e))
    threading.Thread(target=work,daemon=True).start()
-  l.addLayout(form);l.addWidget(btn('Consultar mi cuenta y buscar Kate',find))
-  voice=QLineEdit(self.prefs.get('voice',''));voice.setPlaceholderText('AutomÃ¡tica Â· espaÃ±ol si estÃ¡ instalado');rate=QSpinBox();rate.setRange(-10,10);rate.setValue(self.prefs.get('rate',0));volume=QSpinBox();volume.setRange(0,100);volume.setValue(self.prefs.get('volume',90));local=QFormLayout();local.addRow('Voz Windows de respaldo',voice);local.addRow('Velocidad local',rate);local.addRow('Volumen',volume);mic=QComboBox();mic.addItem('MicrÃ³fono predeterminado',None)
+  l.addLayout(form);l.addWidget(btn('Consultar cuenta ElevenLabs (opcional)',find))
+  voice=QLineEdit(self.prefs.get('voice',''));voice.setPlaceholderText('AutomÃ¡tica Â· espaÃ±ol Windows');rate=QSpinBox();rate.setRange(-10,10);rate.setValue(self.prefs.get('rate',0));volume=QSpinBox();volume.setRange(0,100);volume.setValue(self.prefs.get('volume',90));local=QFormLayout();local.addRow('Voz Windows de respaldo',voice);local.addRow('Velocidad',rate);local.addRow('Volumen',volume);mic=QComboBox();mic.addItem('MicrÃ³fono predeterminado',None)
   try:
    import sounddevice as sd
    for i,x in enumerate(sd.query_devices()):
     if x['max_input_channels']>0:mic.addItem(x['name'],i)
   except Exception:pass
   index=mic.findData(self.prefs.get('microphone'));mic.setCurrentIndex(max(0,index));local.addRow('MicrÃ³fono',mic);l.addLayout(local)
-  def sample():self.player.setSource(QUrl.fromLocalFile(str(ROOT/'voz/Kate-referencia.mp3')));self.player.play()
-  l.addWidget(btn('Escuchar el MP3 de Kate que proporcionaste',sample));l.addWidget(btn('Pausar / continuar audio',lambda:self.player.pause() if self.player.playbackState()==QMediaPlayer.PlaybackState.PlayingState else self.player.play()))
+  def test_now():
+   self.save_pref('voice_mode',mode.currentData());self.save_pref('neural_voice',nbox.currentData());self.save_pref('rate',rate.value());self.audio.setVolume(volume.value()/100)
+   self.speak('Hola, soy Mateo y Aura listos para conversar contigo con una voz mÃ¡s clara y natural.')
+  l.addWidget(btn('Probar voz natural ahora',test_now))
+  l.addWidget(btn('ðŸŽ™ï¸ Iniciar / detener conversaciÃ³n en vivo (manos libres)',lambda:(d.accept(),self.toggle_live_conversation())))
+  l.addWidget(btn('Pausar / continuar audio',lambda:self.player.pause() if self.player.playbackState()==QMediaPlayer.PlaybackState.PlayingState else self.player.play()))
   def save():
    try:
     if key.text().strip():self.voice_key.save(key.text())
-    if mode.currentIndex()==1 and (not voiceid.text().strip() or not self.voice_key.path.exists()):raise ValueError('Configura la clave y el identificador de Kate antes de activar ElevenLabs.')
-    for k,v in [('voice',voice.text()),('rate',rate.value()),('volume',volume.value()),('microphone',mic.currentData()),('voice_mode','elevenlabs' if mode.currentIndex()==1 else 'local'),('voice_id',voiceid.text().strip())]:self.save_pref(k,v)
+    chosen_mode=mode.currentData()
+    if chosen_mode=='elevenlabs' and (not voiceid.text().strip() or not self.voice_key.path.exists()):raise ValueError('Configura la clave y el identificador antes de activar ElevenLabs.')
+    for k,v in [('voice',voice.text()),('rate',rate.value()),('volume',volume.value()),('microphone',mic.currentData()),('voice_mode',chosen_mode),('neural_voice',nbox.currentData()),('voice_id',voiceid.text().strip())]:self.save_pref(k,v)
     self.audio.setVolume(volume.value()/100);d.accept()
    except Exception as e:self.error(e)
-  l.addWidget(btn('Guardar configuraciÃ³n de voz',save));l.addWidget(btn('Eliminar clave guardada',lambda:(self.voice_key.delete(),key.clear(),mode.setCurrentIndex(0),self.save_pref('voice_mode','local'))));d.exec()
+  l.addWidget(btn('Guardar configuraciÃ³n de voz',save));l.addWidget(btn('Eliminar clave ElevenLabs',lambda:(self.voice_key.delete(),key.clear(),mode.setCurrentIndex(0),self.save_pref('voice_mode','neural'))));d.exec()
  def closeEvent(self,event):
   panel=getattr(self,'sql_panel',None)
   if panel is not None and panel.job is not None:QMessageBox.information(self,'Base de datos','Espera a que termine la operaciÃ³n SQL antes de cerrar AURA.');event.ignore();return
@@ -687,6 +752,7 @@ class Window(QMainWindow):
   if (self.busy or self.warming) and QMessageBox.question(self,'Cerrar AURA','Se detendrÃ¡ la tarea en curso. Â¿Cerrar?')!=QMessageBox.StandardButton.Yes:event.ignore();return
   if self.aurax is not None:self.aurax.stop_process()
   self.stop();self.floating.close();
+  if hasattr(self.client,'close'):self.client.close()
   if self.startup is not None:self.startup.release();self.startup=None
   event.accept()
 

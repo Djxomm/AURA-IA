@@ -485,6 +485,15 @@ class AgentEngine:
             if re.search(r'\b3\s*d\b',brief,re.I):
                 system_prompt += '\nSi no se pidió un motor concreto: usa Panda3D para 3D nativo; está incluido. Pygame es para 2D. Crea archivos y prototipos ejecutables, no solo una lista de consejos. No afirmes que Unreal o Blender están instalados.'
             history = []
+        effort = str(getattr(settings, "thinking_effort", "equilibrado") or "equilibrado").lower()
+        if effort == "rapido":
+            system_prompt += "\nModo rápido: ejecuta la herramienta o responde directamente sin bloque de pensamiento ni rodeos."
+        elif effort in ("profundo", "maximo"):
+            system_prompt += (
+                "\nModo agente autónomo profundo (estilo A4B): antes de actuar en tareas complejas, razona brevemente "
+                "causa raíz, restricciones y plan dentro de `<thought>...</thought>`; puedes encadenar varias "
+                "herramientas de lectura en un mismo turno para ir más rápido y debes verificar con compilador/pruebas reales antes de concluir."
+            )
         conversation: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         for item in history:
             role = item["role"]
@@ -623,8 +632,8 @@ class AgentEngine:
                     "steps": step,
                 }
 
-            # Si el modelo emitió bloques XML/fenced sin texto útil, limpiamos el buffer temporal en UI
-            if response.used_tool_mode == "xml" and ("<tool_call>" in response.raw_content or "```tool_call" in response.raw_content):
+            # Si el modelo emitió bloques XML/fenced o <thought> internos, limpiamos el buffer temporal en UI
+            if response.used_tool_mode == "xml" and any(tag in response.raw_content for tag in ("<tool_call>", "```tool_call", "<thought>", "<think>")):
                 await _emit(emit, "stream_clean", {"content": response.content, "step": step})
 
             assistant_tool_calls_payload = [

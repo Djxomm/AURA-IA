@@ -39,6 +39,14 @@ BUILTIN_ACTIONS: tuple[tuple[str, str, str, str], ...] = (
     ("/kicad", "KiCad 10 · Esquemáticos y PCBs", "Crea diagramas electrónicos (.kicad_sch/.kicad_pro/.svg), ERC/DRC, Gerbers y STEP", "Diagramas"),
     ("/diagrama", "Diagramas de bloques, flujo y circuitos", "Genera diagramas vectoriales SVG, Mermaid y esquemáticos KiCad 10 offline", "Diagramas"),
     ("/entrenar", "Entrenar modelos IA locales (desde 0 / LLaMA Pro)", "Enseña, diseña y prepara pipelines locales para entrenar modelos desde 0 o subirlos de categoría", "IA / ML"),
+    ("/conversar", "Conversar por voz en vivo (manos libres)", "Inicia o detiene conversación de voz fluida con MATEO / ANGEL / AURAX con voz neural natural", "Voz"),
+    ("/investigar", "Agente Investigador Profundo", "Investiga en web y código real y entrega informe verificado con fuentes", "Especialistas"),
+    ("/programar", "Agente de Programación Avanzada", "Razonamiento paso a paso, arquitectura multilenguaje, compilación y pruebas reales", "Especialistas"),
+    ("/razonar", "Razonamiento paso a paso (programación profunda)", "Activa deliberación estructurada paso a paso (<thought>) antes de editar y compilar", "Especialistas"),
+    ("/grafico", "Agente de Desarrollo Gráfico y 3D", "Diseño gráfico, SVG, WCAG AAA, NanoBanana local, video 2.5D/avatar y 3D", "Especialistas"),
+    ("/conflictos", "Agente Resolutor de Conflictos", "Resuelve conflictos git merge, errores de compilación, dependencias y pruebas rotas", "Especialistas"),
+    ("/audio", "Transcriptor y Traductor de Audio local", "Transcribe conversaciones de audio offline (.txt / .srt) y las traduce a cualquier idioma", "Voz"),
+    ("/complejo", "Orquestador de Tareas Complejas", "Coordina investigación, diseño, programación, conflictos y verificación paso a paso", "Especialistas"),
     ("/agentes", "Apps CLI · Claude Code / Codex / OpenCode / Ollama", "Abre el lanzador de agentes CLI externos dentro del proyecto AuraX", "Agente"),
     ("/plan", "Planificar arquitectura", "Diseña un plan paso a paso antes de tocar archivos", "Agente"),
     ("/skills", "Administrar habilidades", "Abre el panel de habilidades (importar / activar / quitar)", "Paneles"),
@@ -312,6 +320,35 @@ def resolve_slash_command(text: str, skills_store=None) -> dict[str, Any] | None
             "auto_autonomous": True,
         }
 
+    if cmd in ("/conversar", "/voz", "/hablar"):
+        return {"type": "toggle_live_conversation", "arg": rest}
+    if cmd == "/razonar":
+        task = rest or "Analiza el proyecto actual paso a paso, identifica riesgos o fallos y propón o aplica la corrección verificada."
+        return {
+            "type": "prompt",
+            "prompt": (
+                "Usa **razonamiento paso a paso** dentro de `<thought>...</thought>` (1. objetivo y restricciones, "
+                "2. casos borde y tipos, 3. plan mínimo completo, 4. verificación real con compilador/pruebas) "
+                f"para cumplir con máxima precisión esta orden: {task}"
+            ),
+            "force_programming": True,
+            "auto_autonomous": True,
+            "thinking_effort": "profundo",
+        }
+    if cmd in ("/investigar", "/programar", "/grafico", "/conflictos", "/audio", "/traducir-audio", "/complejo"):
+        from .agent_specialists import build_specialist_prompt
+        spec_key = cmd.lstrip("/")
+        task = rest
+        if cmd == "/traducir-audio" and rest:
+            task = f"Transcribe el audio indicado con `agente_ia.audio_studio.transcribe_audio_file` y tradúcelo conservando marcas de tiempo y archivo `.srt`: {rest}"
+        enriched, eff = build_specialist_prompt(spec_key, task)
+        return {
+            "type": "prompt",
+            "prompt": enriched,
+            "force_programming": True,
+            "auto_autonomous": True,
+            "thinking_effort": eff,
+        }
     if cmd in ("/agentes", "/apps"):
         return {"type": "open_external_agents", "prompt": rest}
     if cmd in ("/codex", "/claude", "/claude-code", "/opencode", "/qwen-code", "/copilot", "/ollama"):

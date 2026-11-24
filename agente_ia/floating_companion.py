@@ -95,11 +95,16 @@ class AuraxInstructionBubble(QWidget):
         actions = QHBoxLayout()
         send_btn = QPushButton("Enviar al chat (Ctrl+Enter)")
         send_btn.clicked.connect(self.submit)
+        voice_btn = QPushButton("🎙️")
+        voice_btn.setObjectName("secondaryBtn")
+        voice_btn.setToolTip("Iniciar o detener conversación de voz en vivo con MATEO / AURAX")
+        voice_btn.clicked.connect(self.start_live_voice)
         apps_btn = QPushButton("Apps CLI")
         apps_btn.setObjectName("secondaryBtn")
         apps_btn.setToolTip("Abrir Claude Code, Codex CLI, OpenCode, Qwen Code u Ollama en el proyecto")
         apps_btn.clicked.connect(self.open_apps)
         actions.addWidget(send_btn, 1)
+        actions.addWidget(voice_btn)
         actions.addWidget(apps_btn)
         layout.addLayout(actions)
 
@@ -146,6 +151,13 @@ class AuraxInstructionBubble(QWidget):
         self.hide()
         if hasattr(self.owner, "open_external_agents"):
             self.owner.open_external_agents(self.editor.toPlainText().strip())
+
+    def start_live_voice(self) -> None:
+        self.hide()
+        if hasattr(self.owner, "toggle_live_conversation"):
+            self.owner.toggle_live_conversation()
+        else:
+            self.companion.dictate()
 
     def submit(self) -> None:
         text = self.editor.toPlainText().strip()
@@ -297,6 +309,7 @@ class FloatingCompanion(QWidget):
         )
         actions = [
             ("💬 Abrir globo de instrucciones", self.open_bubble),
+            ("🎙️ Conversar en vivo (voz con MATEO/AURAX)", lambda: self.owner.toggle_live_conversation() if hasattr(self.owner, "toggle_live_conversation") else self.dictate()),
             ("Abrir AURAX", self.open),
             ("Apps CLI (Codex / Claude / OpenCode…)", lambda: self.owner.open_external_agents() if hasattr(self.owner, "open_external_agents") else None),
             ("Dictar", self.dictate),

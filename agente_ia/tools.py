@@ -424,6 +424,20 @@ def build_system_prompt(
 
 _XML_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL | re.IGNORECASE)
 _FENCE_CALL_RE = re.compile(r"```tool_call\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
+_THOUGHT_RE = re.compile(r"<(?:thought|think)>(.*?)</(?:thought|think)>", re.DOTALL | re.IGNORECASE)
+
+
+def strip_thought_blocks(text: str) -> tuple[str, str]:
+    """Separa bloques de deliberación interna `<thought>...</thought>` / `<think>...</think>`
+    (estilo Gemma 4 A4B Thinking) devolviendo `(texto_visible, pensamiento_interno)`."""
+    if not text:
+        return "", ""
+    thoughts = [m.group(1).strip() for m in _THOUGHT_RE.finditer(text) if m.group(1).strip()]
+    if not thoughts:
+        return text, ""
+    cleaned = _THOUGHT_RE.sub("", text)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned, "\n\n".join(thoughts)
 
 
 def _try_parse_json_obj(raw: str) -> dict[str, Any] | None:
@@ -442,15 +456,17 @@ def _try_parse_json_obj(raw: str) -> dict[str, Any] | None:
 
 
 def parse_xml_tool_calls(text: str) -> tuple[str, list[dict[str, Any]]]:
-    """Extrae llamadas <tool_call>{...}</tool_call> o ```tool_call``` del texto del modelo."""
+    """Extrae llamadas <tool_call>{...}</tool_call> o ```tool_call``` del texto del modelo
+    (separando además bloques internos `<thought>...</thought>` estilo Gemma 4 A4B)."""
     if not text:
         return "", []
 
+    visible_text, _ = strip_thought_blocks(text)
     calls: list[dict[str, Any]] = []
     spans: list[tuple[int, int]] = []
 
     for pattern in (_XML_CALL_RE, _FENCE_CALL_RE):
-        for match in pattern.finditer(text):
+        for match in pattern.finditer(visible_text):
             obj = _try_parse_json_obj(match.group(1))
             if not obj or "name" not in obj:
                 continue
@@ -474,7 +490,7 @@ def parse_xml_tool_calls(text: str) -> tuple[str, list[dict[str, Any]]]:
         # Some small coder models emit the requested tool object as a sole JSON
         # fence. Accept only that unambiguous envelope and known project tools;
         # prose examples and arbitrary JSON remain ordinary response text.
-        fenced = re.fullmatch(r"\s*```json\s*(\{.*\})\s*```\s*", text, re.DOTALL | re.IGNORECASE)
+        fenced = re.fullmatch(r"\s*```json\s*(\{.*\})\s*```\s*", visible_text, re.DOTALL | re.IGNORECASE)
         if fenced:
             obj = _try_parse_json_obj(fenced.group(1))
             if obj and set(obj) <= {"name", "arguments"} and obj.get("name") in ALL_TOOLS and isinstance(obj.get("arguments"), dict):
@@ -482,7 +498,7 @@ def parse_xml_tool_calls(text: str) -> tuple[str, list[dict[str, Any]]]:
         # Qwen2.5 models encode <tool_call>/</tool_call> as special tokens that llama-cli
         # hides by default, leaving a leading bare JSON tool object. Accept only an
         # exact known-tool envelope starting at offset 0.
-        stripped = text.lstrip()
+        stripped = visible_text.lstrip()
         if stripped.startswith("{"):
             try:
                 obj, _ = json.JSONDecoder().raw_decode(stripped)
@@ -495,7 +511,7 @@ def parse_xml_tool_calls(text: str) -> tuple[str, list[dict[str, Any]]]:
                 and isinstance(obj.get("arguments"), dict)
             ):
                 return "", [{"id": "json_" + uuid.uuid4().hex[:10], "name": obj["name"], "arguments": obj["arguments"]}]
-        return text, []
+        return visible_text, []
 
     # Remover únicamente los bloques reconocidos para conservar el texto humano restante
     spans.sort()
@@ -503,10 +519,10 @@ def parse_xml_tool_calls(text: str) -> tuple[str, list[dict[str, Any]]]:
     cursor = 0
     for start, end in spans:
         if start > cursor:
-            parts.append(text[cursor:start])
+            parts.append(visible_text[cursor:start])
         cursor = max(cursor, end)
-    if cursor < len(text):
-        parts.append(text[cursor:])
+    if cursor < len(visible_text):
+        parts.append(visible_text[cursor:])
 
     clean_text = re.sub(r"\n{3,}", "\n\n", "".join(parts)).strip()
     return clean_text, calls
